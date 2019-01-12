@@ -31,11 +31,11 @@ func computeHMAC(values url.Values, apiSecret shopify.APISecret) string {
 	return hex.EncodeToString(hmac.Sum(nil))
 }
 
-func verifyHMAC(hmac string, values url.Values, apiSecret shopify.APISecret) error {
+func verifyHMAC(h string, values url.Values, apiSecret shopify.APISecret) error {
 	expected := computeHMAC(values, apiSecret)
 
-	if hmac != expected {
-		return fmt.Errorf("HMAC verification failed: expected `%s` but got `%s`", expected, hmac)
+	if !hmac.Equal([]byte(h), []byte(expected)) {
+		return fmt.Errorf("HMAC verification failed: expected `%s` but got `%s`", expected, h)
 	}
 
 	return nil
