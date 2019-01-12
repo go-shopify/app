@@ -4,18 +4,15 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strings"
 
+	"github.com/go-shopify/shopify"
 	"github.com/gorilla/mux"
 )
 
 // handlerImpl represents a Shopify handler.
 type handlerImpl struct {
 	*mux.Router
-	apiKey    string
-	apiSecret string
-	publicURL string
-	scope     []string
+	Config
 }
 
 // NewHandler instantiates a new Shopify Handler, from the specified
@@ -27,31 +24,26 @@ func NewHandler(config *Config) http.Handler {
 
 	handler := handlerImpl{
 		Router: mux.NewRouter(),
+		Config: *config,
 	}
 
 	handler.Router.Path("/").Methods(http.MethodGet).HandlerFunc(handler.install)
 	handler.Router.Path("/auth/callback").Methods(http.MethodGet).HandlerFunc(handler.install)
 
 	if config.DefaultHandler != nil {
-		handler.Router.Handle("", config.DefaultHandler)
+		handler.Router.Handle("", handler.DefaultHandler)
 	}
 
 	return handler
 }
 
 func (h handlerImpl) install(w http.ResponseWriter, req *http.Request) {
-	shop := req.URL.Query().Get("shop")
+	shop := shopify.Shop(req.URL.Query().Get("shop"))
 
 	if shop == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprintf(w, "Missing `shop` parameter.")
 		return
-	}
-
-	oauthURL := &url.URL{
-		Scheme: "https",
-		Host:   shop,
-		Path:   "/admin/oauth/authorize",
 	}
 
 	state, err := generateRandomState()
@@ -62,9 +54,15 @@ func (h handlerImpl) install(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	oauthURL := &url.URL{
+		Scheme: "https",
+		Host:   string(shop),
+		Path:   "/admin/oauth/authorize",
+	}
+
 	q := oauthURL.Query()
-	q.Set("client_id", h.apiKey)
-	q.Set("scope", strings.Join(h.scope, ","))
+	q.Set("client_id", string(h.APIKey))
+	q.Set("scope", h.Scopes.String())
 	q.Set("state", state)
 	q.Set("redirect_uri", "/auth/callback")
 	oauthURL.RawQuery = q.Encode()

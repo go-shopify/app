@@ -1,8 +1,45 @@
 package shopify
 
+import "strings"
+
 // Scope represents an OAuth scope, as defined at
 // https://help.shopify.com/en/api/getting-started/authentication/oauth/scopes.
 type Scope string
+
+// Scopes represents a list of scopes.
+type Scopes []Scope
+
+func (s Scopes) String() string {
+	strs := make([]string, len(s))
+
+	for i, scope := range s {
+		strs[i] = string(scope)
+	}
+
+	return strings.Join(strs, ",")
+}
+
+// ParseScopes parses a string of comma-separated scopes.
+//
+// If the string has an incorrect format, an error is returned.
+func ParseScopes(s string) (result Scopes, err error) {
+	// Note: We don't currently return any error, but it may happen so we
+	// already make the function return an error to prevent future API breaks.
+
+	strs := strings.Split(s, ",")
+
+	result = make(Scopes, 0, len(strs))
+
+	for _, scope := range strs {
+		scope = strings.TrimSpace(scope)
+
+		if scope != "" {
+			result = append(result, Scope(scope))
+		}
+	}
+
+	return
+}
 
 const (
 	// Authenticated access scopes.

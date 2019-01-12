@@ -1,4 +1,4 @@
-module github.com/go-shopify
+module github.com/go-shopify/shopify
 
 require (
 	github.com/gorilla/context v1.1.1 // indirect

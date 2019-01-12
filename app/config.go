@@ -1,23 +1,27 @@
 package app
 
-import "net/http"
+import (
+	"net/http"
+
+	"github.com/go-shopify/shopify"
+)
 
 // Config contains the configuration for a Handler.
 type Config struct {
 	// APIKey is the Shopify API key for the app, as indicated on the Shopify
 	// App page.
-	APIKey string
+	APIKey shopify.APIKey
 
 	// APISecret is the Shopify API secret for the app, as indicated on the
 	// Shopify App page.
-	APISecret string
+	APISecret shopify.APISecret
 
 	// PublicURL is the public URL at which the app will be instantiated.
 	PublicURL string
 
-	// The Scope of the app, as documented at
+	// The Scopes of the app, as documented at
 	// https://help.shopify.com/en/api/getting-started/authentication/oauth/scopes.
-	Scope []string
+	Scopes shopify.Scopes
 
 	// DefaultHandler is the handler to call when no known route was matched.
 	//
