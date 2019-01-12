@@ -19,6 +19,9 @@ const pathAuthCallback = "/auth/callback"
 
 // NewHandler instantiates a new Shopify Handler, from the specified
 // configuration.
+//
+// That handler handles OAuth access neogitation and injects shop, locale and
+// timestamp information into the request context.
 func NewHandler(config *Config) http.Handler {
 	if config == nil {
 		panic("A configuration is required.")
@@ -29,17 +32,13 @@ func NewHandler(config *Config) http.Handler {
 		Config: *config,
 	}
 
-	handler.Router.Path("/").Methods(http.MethodGet).Handler(NewHMACHandler(http.HandlerFunc(handler.install), handler.APISecret))
-	handler.Router.Path(pathAuthCallback).Methods(http.MethodGet).Handler(NewHMACHandler(http.HandlerFunc(handler.authCallback), handler.APISecret))
+	handler.Router.Path(pathAuthCallback).Methods(http.MethodGet).HandlerFunc(handler.authCallback)
+	handler.Router.PathPrefix("/").HandlerFunc(handler.delegateOrInstall)
 
-	if config.DefaultHandler != nil {
-		handler.Router.Handle("", handler.DefaultHandler)
-	}
-
-	return handler
+	return NewHMACHandler(handler, handler.APISecret)
 }
 
-func (h handlerImpl) install(w http.ResponseWriter, req *http.Request) {
+func (h handlerImpl) delegateOrInstall(w http.ResponseWriter, req *http.Request) {
 	shop := shopify.Shop(req.URL.Query().Get("shop"))
 
 	if shop == "" {
@@ -48,6 +47,27 @@ func (h handlerImpl) install(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	req = req.WithContext(WithShop(req.Context(), shop))
+
+	accessToken, err := h.OnAccessTokenRequested(req.Context(), shop)
+
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "Unexpected error. Please contact the App's administrator.")
+		return
+	}
+
+	if accessToken == "" {
+		h.install(w, req, shop)
+		return
+	}
+
+	if h.Handler != nil {
+		h.Handler.ServeHTTP(w, req)
+	}
+}
+
+func (h handlerImpl) install(w http.ResponseWriter, req *http.Request, shop shopify.Shop) {
 	state, err := generateRandomState()
 
 	if err != nil {
@@ -108,5 +128,32 @@ func (h handlerImpl) authCallback(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// TODO: Implement.
+	code := req.URL.Query().Get("code")
+
+	if code == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, "Missing `code` parameter.")
+		return
+	}
+
+	adminClient := shopify.NewAdminClient(shop, "")
+	accessToken, err := adminClient.GetOAuthAccessToken(req.Context(), h.APIKey, h.APISecret, code)
+
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "Unexpected error. Please contact the App's administrator.")
+		return
+	}
+
+	if h.OnAccessTokenUpdated != nil {
+		if err = h.OnAccessTokenUpdated(req.Context(), shop, accessToken); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "Unexpected error. Please contact the App's administrator.")
+			return
+		}
+	}
+
+	if h.DefaultHandler != nil {
+		h.DefaultHandler.ServeHTTP(w, req)
+	}
 }

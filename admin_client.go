@@ -30,9 +30,10 @@ type AdminClient struct {
 const headerXShopifyAccessToken = "X-Shopify-Access-Token"
 
 // NewAdminClient instantiates a new admin client for the specified shop.
-func NewAdminClient(shop Shop) *AdminClient {
+func NewAdminClient(shop Shop, accessToken AccessToken) *AdminClient {
 	return &AdminClient{
-		Shop: shop,
+		Shop:        shop,
+		AccessToken: accessToken,
 		shopURL: &url.URL{
 			Scheme: "https",
 			Host:   string(shop),

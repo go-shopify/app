@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"net/http"
 	"net/url"
 
@@ -24,8 +25,23 @@ type Config struct {
 	// https://help.shopify.com/en/api/getting-started/authentication/oauth/scopes.
 	Scopes shopify.Scopes
 
-	// DefaultHandler is the handler to call when no known route was matched.
+	// Handler is the handler to defer normal requests to.
+	Handler http.Handler
+
+	// OnAccessTokenRequested is a function to call whenever an access token is
+	// requested for a given shop.
 	//
-	// If none is specified, a 404 is returned for unknown routes.
-	DefaultHandler http.Handler
+	// If an error is returned, the request fails.
+
+	// If an empty access token is returned, the OAuth authentication cycle
+	// will start.
+	OnAccessTokenRequested func(ctx context.Context, shop shopify.Shop) (shopify.AccessToken, error)
+
+	// OnAccessTokenUpdated is a function to call whenever an access token for
+	// a shop was updated.
+	OnAccessTokenUpdated func(ctx context.Context, shop shopify.Shop, accessToken shopify.AccessToken) error
+
+	// OnAccessTokenDeleted is a function to call whenever an access token for
+	// a shop should be deleted.
+	OnAccessTokenDelete func(ctx context.Context, shop shopify.Shop) error
 }
