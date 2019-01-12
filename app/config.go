@@ -2,6 +2,7 @@ package app
 
 import (
 	"net/http"
+	"net/url"
 
 	"github.com/go-shopify/shopify"
 )
@@ -17,7 +18,7 @@ type Config struct {
 	APISecret shopify.APISecret
 
 	// PublicURL is the public URL at which the app will be instantiated.
-	PublicURL string
+	PublicURL *url.URL
 
 	// The Scopes of the app, as documented at
 	// https://help.shopify.com/en/api/getting-started/authentication/oauth/scopes.

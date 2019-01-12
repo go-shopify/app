@@ -15,6 +15,8 @@ type handlerImpl struct {
 	Config
 }
 
+const pathAuthCallback = "/auth/callback"
+
 // NewHandler instantiates a new Shopify Handler, from the specified
 // configuration.
 func NewHandler(config *Config) http.Handler {
@@ -27,8 +29,8 @@ func NewHandler(config *Config) http.Handler {
 		Config: *config,
 	}
 
-	handler.Router.Path("/").Methods(http.MethodGet).HandlerFunc(handler.install)
-	handler.Router.Path("/auth/callback").Methods(http.MethodGet).HandlerFunc(handler.install)
+	handler.Router.Path("/").Methods(http.MethodGet).Handler(NewHMACHandler(http.HandlerFunc(handler.install), handler.APISecret))
+	handler.Router.Path(pathAuthCallback).Methods(http.MethodGet).Handler(NewHMACHandler(http.HandlerFunc(handler.authCallback), handler.APISecret))
 
 	if config.DefaultHandler != nil {
 		handler.Router.Handle("", handler.DefaultHandler)
@@ -64,15 +66,47 @@ func (h handlerImpl) install(w http.ResponseWriter, req *http.Request) {
 	q.Set("client_id", string(h.APIKey))
 	q.Set("scope", h.Scopes.String())
 	q.Set("state", state)
-	q.Set("redirect_uri", "/auth/callback")
+	q.Set("redirect_uri", h.PublicURL.ResolveReference(&url.URL{Path: pathAuthCallback}).String())
 	oauthURL.RawQuery = q.Encode()
 
 	// Set a cookie to ensure the auth callback is really called by the right
 	// entity.
 	http.SetCookie(w, &http.Cookie{Name: "state", Value: state})
+
+	// Redirect the browser to the OAuth autorization page.
 	http.Redirect(w, req, oauthURL.String(), http.StatusFound)
 }
 
 func (h handlerImpl) authCallback(w http.ResponseWriter, req *http.Request) {
+	shop := shopify.Shop(req.URL.Query().Get("shop"))
+
+	if shop == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, "Missing `shop` parameter.")
+		return
+	}
+
+	stateCookie, err := req.Cookie("state")
+
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, "Missing `state` cookie.")
+		return
+	}
+
+	state := req.URL.Query().Get("state")
+
+	if state == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, "Missing `state` parameter.")
+		return
+	}
+
+	if stateCookie.Value != state {
+		w.WriteHeader(http.StatusForbidden)
+		fmt.Fprintf(w, "A different `state` value was expected.")
+		return
+	}
+
 	// TODO: Implement.
 }
