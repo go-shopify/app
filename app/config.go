@@ -2,8 +2,9 @@ package app
 
 import (
 	"context"
-	"net/http"
+	"fmt"
 	"net/url"
+	"os"
 
 	"github.com/go-shopify/shopify"
 )
@@ -25,26 +26,45 @@ type Config struct {
 	// https://help.shopify.com/en/api/getting-started/authentication/oauth/scopes.
 	Scopes shopify.Scopes
 
-	// Handler is the handler to defer normal requests to.
-	Handler http.Handler
-
-	// OnAccessTokenRequested is a function to call whenever an access token is
-	// requested for a given shop.
-	//
-	// If an error is returned, the request fails.
-
-	// If an empty access token is returned, the OAuth authentication cycle
-	// will start.
-	OnAccessTokenRequested func(ctx context.Context, shop shopify.Shop) (shopify.AccessToken, error)
-
-	// OnAccessTokenUpdated is a function to call whenever an access token for
-	// a shop was updated.
-	OnAccessTokenUpdated func(ctx context.Context, shop shopify.Shop, accessToken shopify.AccessToken) error
-
-	// OnAccessTokenDeleted is a function to call whenever an access token for
-	// a shop should be deleted.
-	OnAccessTokenDelete func(ctx context.Context, shop shopify.Shop) error
-
 	// OnError is a function to call whenever an error happens.
 	OnError func(ctx context.Context, err error)
+}
+
+const (
+	envShopifyAPIKey    = "SHOPIFY_API_KEY"
+	envShopifyAPISecret = "SHOPIFY_API_SECRET"
+	envShopifyPublicURL = "SHOPIFY_PUBLIC_URL"
+	envShopifyScopes    = "SHOPIFY_SCOPES"
+)
+
+// ReadConfigFromEnvironment reads a configuration from environment variables.
+func ReadConfigFromEnvironment() (*Config, error) {
+	publicURL, err := url.Parse(os.Getenv(envShopifyPublicURL))
+
+	if err != nil {
+		return nil, fmt.Errorf("incorrect `%s`: %s", envShopifyPublicURL, err)
+	}
+
+	scopes, err := shopify.ParseScopes(os.Getenv(envShopifyScopes))
+
+	if err != nil {
+		return nil, fmt.Errorf("incorrect `%s`: %s", envShopifyScopes, err)
+	}
+
+	config := &Config{
+		APIKey:    shopify.APIKey(os.Getenv(envShopifyAPIKey)),
+		APISecret: shopify.APISecret(os.Getenv(envShopifyAPISecret)),
+		PublicURL: publicURL,
+		Scopes:    scopes,
+	}
+
+	if config.APIKey == "" {
+		return nil, fmt.Errorf("`%s` is not set", envShopifyAPIKey)
+	}
+
+	if config.APISecret == "" {
+		return nil, fmt.Errorf("`%s` is not set", envShopifyAPISecret)
+	}
+
+	return config, nil
 }

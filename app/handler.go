@@ -14,6 +14,8 @@ import (
 type handlerImpl struct {
 	*mux.Router
 	Config
+	handler http.Handler
+	storage AccessTokenStorage
 }
 
 const pathAuthCallback = "/auth/callback"
@@ -23,20 +25,26 @@ const pathAuthCallback = "/auth/callback"
 //
 // That handler handles OAuth access neogitation and injects shop, locale and
 // timestamp information into the request context.
-func NewHandler(config *Config) http.Handler {
+func NewHandler(handler http.Handler, storage AccessTokenStorage, config *Config) http.Handler {
+	if storage == nil {
+		panic("An access token storage is required.")
+	}
+
 	if config == nil {
 		panic("A configuration is required.")
 	}
 
-	handler := handlerImpl{
-		Router: mux.NewRouter(),
-		Config: *config,
+	h := handlerImpl{
+		Router:  mux.NewRouter(),
+		Config:  *config,
+		handler: handler,
+		storage: storage,
 	}
 
-	handler.Router.Path(pathAuthCallback).Methods(http.MethodGet).HandlerFunc(handler.authCallback)
-	handler.Router.PathPrefix("/").HandlerFunc(handler.delegateOrInstall)
+	h.Router.Path(pathAuthCallback).Methods(http.MethodGet).HandlerFunc(h.authCallback)
+	h.Router.PathPrefix("/").HandlerFunc(h.delegateOrInstall)
 
-	return NewHMACHandler(handler, handler.APISecret)
+	return NewHMACHandler(h, h.APISecret)
 }
 
 func (h handlerImpl) delegateOrInstall(w http.ResponseWriter, req *http.Request) {
@@ -50,7 +58,7 @@ func (h handlerImpl) delegateOrInstall(w http.ResponseWriter, req *http.Request)
 
 	req = req.WithContext(WithShop(req.Context(), shop))
 
-	accessToken, err := h.OnAccessTokenRequested(req.Context(), shop)
+	accessToken, err := h.storage.GetAccessToken(req.Context(), shop)
 
 	if err != nil {
 		if h.OnError != nil {
@@ -67,8 +75,8 @@ func (h handlerImpl) delegateOrInstall(w http.ResponseWriter, req *http.Request)
 		return
 	}
 
-	if h.Handler != nil {
-		h.Handler.ServeHTTP(w, req)
+	if h.handler != nil {
+		h.handler.ServeHTTP(w, req)
 	}
 }
 
@@ -154,16 +162,14 @@ func (h handlerImpl) authCallback(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if h.OnAccessTokenUpdated != nil {
-		if err = h.OnAccessTokenUpdated(req.Context(), shop, accessToken); err != nil {
-			if h.OnError != nil {
-				h.OnError(req.Context(), fmt.Errorf("updating access token for `%s`: %s", shop, err))
-			}
-
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "Unexpected error. Please contact the App's administrator.")
-			return
+	if err = h.storage.UpdateAccessToken(req.Context(), shop, accessToken); err != nil {
+		if h.OnError != nil {
+			h.OnError(req.Context(), fmt.Errorf("updating access token for `%s`: %s", shop, err))
 		}
+
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "Unexpected error. Please contact the App's administrator.")
+		return
 	}
 
 	// Remove the state cookie.
