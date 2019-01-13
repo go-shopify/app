@@ -53,13 +53,17 @@ func (h handlerImpl) delegateOrInstall(w http.ResponseWriter, req *http.Request)
 	accessToken, err := h.OnAccessTokenRequested(req.Context(), shop)
 
 	if err != nil {
+		if h.OnError != nil {
+			h.OnError(req.Context(), fmt.Errorf("failed to load access token for `%s`: %s", shop, err))
+		}
+
 		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Fprintf(w, "Unexpected error. Please contact the App's administrator.")
 		return
 	}
 
 	if accessToken == "" {
-		h.install(w, req, shop)
+		h.redirectToInstall(w, req, shop)
 		return
 	}
 
@@ -68,7 +72,7 @@ func (h handlerImpl) delegateOrInstall(w http.ResponseWriter, req *http.Request)
 	}
 }
 
-func (h handlerImpl) install(w http.ResponseWriter, req *http.Request, shop shopify.Shop) {
+func (h handlerImpl) redirectToInstall(w http.ResponseWriter, req *http.Request, shop shopify.Shop) {
 	state, err := generateRandomState()
 
 	if err != nil {
@@ -141,6 +145,10 @@ func (h handlerImpl) authCallback(w http.ResponseWriter, req *http.Request) {
 	accessToken, err := adminClient.GetOAuthAccessToken(req.Context(), h.APIKey, h.APISecret, code)
 
 	if err != nil {
+		if h.OnError != nil {
+			h.OnError(req.Context(), fmt.Errorf("get access token from Shopify for `%s`: %s", shop, err))
+		}
+
 		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Fprintf(w, "Unexpected error. Please contact the App's administrator.")
 		return
@@ -148,6 +156,10 @@ func (h handlerImpl) authCallback(w http.ResponseWriter, req *http.Request) {
 
 	if h.OnAccessTokenUpdated != nil {
 		if err = h.OnAccessTokenUpdated(req.Context(), shop, accessToken); err != nil {
+			if h.OnError != nil {
+				h.OnError(req.Context(), fmt.Errorf("updating access token for `%s`: %s", shop, err))
+			}
+
 			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Fprintf(w, "Unexpected error. Please contact the App's administrator.")
 			return

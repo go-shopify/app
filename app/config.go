@@ -44,4 +44,7 @@ type Config struct {
 	// OnAccessTokenDeleted is a function to call whenever an access token for
 	// a shop should be deleted.
 	OnAccessTokenDelete func(ctx context.Context, shop shopify.Shop) error
+
+	// OnError is a function to call whenever an error happens.
+	OnError func(ctx context.Context, err error)
 }
