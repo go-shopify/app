@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/go-shopify/shopify"
 	"github.com/gorilla/mux"
@@ -153,7 +154,9 @@ func (h handlerImpl) authCallback(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	if h.DefaultHandler != nil {
-		h.DefaultHandler.ServeHTTP(w, req)
-	}
+	// Remove the state cookie.
+	http.SetCookie(w, &http.Cookie{Name: "state", Expires: time.Unix(0, 0)})
+
+	// Redirect the browser to the main page.
+	http.Redirect(w, req, h.PublicURL.String(), http.StatusFound)
 }
