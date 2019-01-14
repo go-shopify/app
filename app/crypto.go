@@ -26,8 +26,11 @@ func generateRandomState() (string, error) {
 }
 
 func computeHMAC(values url.Values, apiSecret shopify.APISecret) string {
+	s := values.Encode()
+	s, _ = url.QueryUnescape(s)
+
 	hmac := hmac.New(sha256.New, []byte(apiSecret))
-	hmac.Write([]byte(values.Encode()))
+	hmac.Write([]byte(s))
 	return hex.EncodeToString(hmac.Sum(nil))
 }
 

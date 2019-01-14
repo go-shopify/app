@@ -63,4 +63,34 @@ func TestNewHMACHandler(t *testing.T) {
 			t.Errorf("Body follows:\n%s", w.Body.String())
 		}
 	})
+
+	t.Run("encoding-encoded", func(t *testing.T) {
+		w := &httptest.ResponseRecorder{
+			Body: &bytes.Buffer{},
+		}
+
+		req, _ := http.NewRequest(http.MethodGet, "http://myhost?code=0907a61c0c8d55e99db179b68161bc00&hmac=02efe8e8d299cb8d403022a485b6685cd186f499258110568c9af306a3598083&timestamp=1337178173&shop=some-shop.myshopify.com&state=a%3D%3D", nil)
+
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected %d but got %d", http.StatusOK, w.Code)
+			t.Errorf("Body follows:\n%s", w.Body.String())
+		}
+	})
+
+	t.Run("encoding-decoded", func(t *testing.T) {
+		w := &httptest.ResponseRecorder{
+			Body: &bytes.Buffer{},
+		}
+
+		req, _ := http.NewRequest(http.MethodGet, "http://myhost?code=0907a61c0c8d55e99db179b68161bc00&hmac=02efe8e8d299cb8d403022a485b6685cd186f499258110568c9af306a3598083&timestamp=1337178173&shop=some-shop.myshopify.com&state=a==", nil)
+
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected %d but got %d", http.StatusOK, w.Code)
+			t.Errorf("Body follows:\n%s", w.Body.String())
+		}
+	})
 }
