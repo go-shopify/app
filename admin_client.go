@@ -92,7 +92,11 @@ func (c *AdminClient) GetOAuthAccessToken(ctx context.Context, apiKey APIKey, ap
 		ClientID     APIKey    `json:"client_id"`
 		ClientSecret APISecret `json:"client_secret"`
 		Code         string    `json:"code"`
-	}{})
+	}{
+		ClientID:     apiKey,
+		ClientSecret: apiSecret,
+		Code:         code,
+	})
 
 	if err != nil {
 		return "", fmt.Errorf("failed to encode access token payload: %s", err)
