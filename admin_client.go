@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"mime"
 	"net/http"
 	"net/url"
 )
@@ -124,10 +125,12 @@ func (c *AdminClient) GetOAuthAccessToken(ctx context.Context, apiKey APIKey, ap
 		return "", fmt.Errorf("unexpected return status code of %d (body follows):\n%s", resp.StatusCode, string(body))
 	}
 
-	if resp.Header.Get("Content-Type") != "application/json" {
+	mediaType, _, _ := mime.ParseMediaType(resp.Header.Get("Content-Type"))
+
+	if mediaType != "application/json" {
 		body, _ := ioutil.ReadAll(resp.Body)
 
-		return "", fmt.Errorf("unexpected content-type `%s` (body follows):\n%s", resp.Header.Get("Content-Type"), string(body))
+		return "", fmt.Errorf("unexpected content-type `%s` (body follows):\n%s", mediaType, string(body))
 	}
 
 	result := &struct {
