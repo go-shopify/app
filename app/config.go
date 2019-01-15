@@ -22,9 +22,9 @@ type Config struct {
 	// PublicURL is the public URL at which the app will be instantiated.
 	PublicURL *url.URL
 
-	// The Scopes of the app, as documented at
+	// The Scope of the app, as documented at
 	// https://help.shopify.com/en/api/getting-started/authentication/oauth/scopes.
-	Scopes shopify.Scopes
+	Scope shopify.Scope
 
 	// OnError is a function to call whenever an error happens.
 	OnError func(ctx context.Context, err error)
@@ -34,7 +34,7 @@ const (
 	envShopifyAPIKey    = "SHOPIFY_API_KEY"
 	envShopifyAPISecret = "SHOPIFY_API_SECRET"
 	envShopifyPublicURL = "SHOPIFY_PUBLIC_URL"
-	envShopifyScopes    = "SHOPIFY_SCOPES"
+	envShopifyScope     = "SHOPIFY_SCOPE"
 )
 
 // ReadConfigFromEnvironment reads a configuration from environment variables.
@@ -45,17 +45,17 @@ func ReadConfigFromEnvironment() (*Config, error) {
 		return nil, fmt.Errorf("incorrect `%s`: %s", envShopifyPublicURL, err)
 	}
 
-	scopes, err := shopify.ParseScopes(os.Getenv(envShopifyScopes))
+	scope, err := shopify.ParseScope(os.Getenv(envShopifyScope))
 
 	if err != nil {
-		return nil, fmt.Errorf("incorrect `%s`: %s", envShopifyScopes, err)
+		return nil, fmt.Errorf("incorrect `%s`: %s", envShopifyScope, err)
 	}
 
 	config := &Config{
 		APIKey:    shopify.APIKey(os.Getenv(envShopifyAPIKey)),
 		APISecret: shopify.APISecret(os.Getenv(envShopifyAPISecret)),
 		PublicURL: publicURL,
-		Scopes:    scopes,
+		Scope:     scope,
 	}
 
 	if config.APIKey == "" {

@@ -69,15 +69,32 @@ func (c *AdminClient) newURL(path string, values url.Values) *url.URL {
 	return c.shopURL.ResolveReference(&url.URL{Path: path, RawQuery: values.Encode()})
 }
 
-func (c *AdminClient) newRequest(ctx context.Context, method string, path string, values url.Values, body io.Reader) (*http.Request, error) {
+func (c *AdminClient) newRequest(ctx context.Context, method string, path string, values url.Values, body interface{}) (*http.Request, error) {
+	var r io.Reader
+
+	if body != nil {
+		data, err := json.Marshal(body)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to JSON-marshal the request body (%#v): %s", body, err)
+		}
+
+		r = bytes.NewBuffer(data)
+	}
+
 	u := c.newURL(path, values)
-	req, err := http.NewRequest(method, u.String(), body)
+	req, err := http.NewRequest(method, u.String(), r)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create HTTP request: %s", err)
 	}
 
 	req = req.WithContext(ctx)
+
+	// If we have a body, assume it will be JSON.
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 
 	if c.AccessToken != "" {
 		req.Header.Add(headerXShopifyAccessToken, string(c.AccessToken))
@@ -86,10 +103,10 @@ func (c *AdminClient) newRequest(ctx context.Context, method string, path string
 	return req, nil
 }
 
-// GetOAuthAccessToken recovers a permanent access token for the associated
-// shop, using the specified code.
-func (c *AdminClient) GetOAuthAccessToken(ctx context.Context, apiKey APIKey, apiSecret APISecret, code string) (AccessToken, error) {
-	data, err := json.Marshal(struct {
+// GetOAuthToken recovers a permanent access token for the associated shop,
+// using the specified code.
+func (c *AdminClient) GetOAuthToken(ctx context.Context, apiKey APIKey, apiSecret APISecret, code string) (*OAuthToken, error) {
+	body := struct {
 		ClientID     APIKey    `json:"client_id"`
 		ClientSecret APISecret `json:"client_secret"`
 		Code         string    `json:"code"`
@@ -97,24 +114,18 @@ func (c *AdminClient) GetOAuthAccessToken(ctx context.Context, apiKey APIKey, ap
 		ClientID:     apiKey,
 		ClientSecret: apiSecret,
 		Code:         code,
-	})
-
-	if err != nil {
-		return "", fmt.Errorf("failed to encode access token payload: %s", err)
 	}
 
-	req, err := c.newRequest(ctx, http.MethodPost, "/admin/oauth/access_token", nil, bytes.NewBuffer(data))
+	req, err := c.newRequest(ctx, http.MethodPost, "/admin/oauth/access_token", nil, body)
 
 	if err != nil {
-		return "", fmt.Errorf("failed to create request: %s", err)
+		return nil, fmt.Errorf("failed to create request: %s", err)
 	}
-
-	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.httpClient().Do(req)
 
 	if err != nil {
-		return "", fmt.Errorf("request failed: %s", err)
+		return nil, fmt.Errorf("request failed: %s", err)
 	}
 
 	defer flushAndCloseBody(resp.Body)
@@ -122,7 +133,7 @@ func (c *AdminClient) GetOAuthAccessToken(ctx context.Context, apiKey APIKey, ap
 	if resp.StatusCode != http.StatusOK {
 		body, _ := ioutil.ReadAll(resp.Body)
 
-		return "", fmt.Errorf("unexpected return status code of %d (body follows):\n%s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("unexpected return status code of %d (body follows):\n%s", resp.StatusCode, string(body))
 	}
 
 	mediaType, _, _ := mime.ParseMediaType(resp.Header.Get("Content-Type"))
@@ -130,18 +141,16 @@ func (c *AdminClient) GetOAuthAccessToken(ctx context.Context, apiKey APIKey, ap
 	if mediaType != "application/json" {
 		body, _ := ioutil.ReadAll(resp.Body)
 
-		return "", fmt.Errorf("unexpected content-type `%s` (body follows):\n%s", mediaType, string(body))
+		return nil, fmt.Errorf("unexpected content-type `%s` (body follows):\n%s", mediaType, string(body))
 	}
 
-	result := &struct {
-		AccessToken AccessToken `json:"access_token"`
-	}{}
+	result := &OAuthToken{}
 
 	if err := json.NewDecoder(resp.Body).Decode(result); err != nil {
-		return "", fmt.Errorf("unable to parse access token payload: %s", err)
+		return nil, fmt.Errorf("unable to parse OAuth token: %s", err)
 	}
 
-	return result.AccessToken, nil
+	return result, nil
 }
 
 func flushAndCloseBody(r io.ReadCloser) {

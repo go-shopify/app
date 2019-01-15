@@ -15,7 +15,7 @@ type handlerImpl struct {
 	*mux.Router
 	Config
 	handler http.Handler
-	storage AccessTokenStorage
+	storage OAuthTokenStorage
 }
 
 const pathAuthCallback = "/auth/callback"
@@ -25,9 +25,9 @@ const pathAuthCallback = "/auth/callback"
 //
 // That handler handles OAuth access neogitation and injects shop, locale and
 // timestamp information into the request context.
-func NewHandler(handler http.Handler, storage AccessTokenStorage, config *Config) http.Handler {
+func NewHandler(handler http.Handler, storage OAuthTokenStorage, config *Config) http.Handler {
 	if storage == nil {
-		panic("An access token storage is required.")
+		panic("An OAuth token storage is required.")
 	}
 
 	if config == nil {
@@ -58,11 +58,11 @@ func (h handlerImpl) delegateOrInstall(w http.ResponseWriter, req *http.Request)
 
 	req = req.WithContext(WithShop(req.Context(), shop))
 
-	accessToken, err := h.storage.GetAccessToken(req.Context(), shop)
+	oauthToken, err := h.storage.GetOAuthToken(req.Context(), shop)
 
 	if err != nil {
 		if h.OnError != nil {
-			h.OnError(req.Context(), fmt.Errorf("failed to load access token for `%s`: %s", shop, err))
+			h.OnError(req.Context(), fmt.Errorf("failed to load OAuth token for `%s`: %s", shop, err))
 		}
 
 		w.WriteHeader(http.StatusInternalServerError)
@@ -70,7 +70,7 @@ func (h handlerImpl) delegateOrInstall(w http.ResponseWriter, req *http.Request)
 		return
 	}
 
-	if accessToken == "" {
+	if oauthToken == nil {
 		h.redirectToInstall(w, req, shop)
 		return
 	}
@@ -97,7 +97,7 @@ func (h handlerImpl) redirectToInstall(w http.ResponseWriter, req *http.Request,
 
 	q := oauthURL.Query()
 	q.Set("client_id", string(h.APIKey))
-	q.Set("scope", h.Scopes.String())
+	q.Set("scope", h.Scope.String())
 	q.Set("state", state)
 	q.Set("redirect_uri", h.PublicURL.ResolveReference(&url.URL{Path: pathAuthCallback}).String())
 	oauthURL.RawQuery = q.Encode()
@@ -150,11 +150,11 @@ func (h handlerImpl) authCallback(w http.ResponseWriter, req *http.Request) {
 	}
 
 	adminClient := shopify.NewAdminClient(shop, "")
-	accessToken, err := adminClient.GetOAuthAccessToken(req.Context(), h.APIKey, h.APISecret, code)
+	oauthToken, err := adminClient.GetOAuthToken(req.Context(), h.APIKey, h.APISecret, code)
 
 	if err != nil {
 		if h.OnError != nil {
-			h.OnError(req.Context(), fmt.Errorf("get access token from Shopify for `%s`: %s", shop, err))
+			h.OnError(req.Context(), fmt.Errorf("get OAuth token from Shopify for `%s`: %s", shop, err))
 		}
 
 		w.WriteHeader(http.StatusInternalServerError)
@@ -162,9 +162,9 @@ func (h handlerImpl) authCallback(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if err = h.storage.UpdateAccessToken(req.Context(), shop, accessToken); err != nil {
+	if err = h.storage.UpdateOAuthToken(req.Context(), shop, *oauthToken); err != nil {
 		if h.OnError != nil {
-			h.OnError(req.Context(), fmt.Errorf("updating access token for `%s`: %s", shop, err))
+			h.OnError(req.Context(), fmt.Errorf("updating OAuth token for `%s`: %s", shop, err))
 		}
 
 		w.WriteHeader(http.StatusInternalServerError)

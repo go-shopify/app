@@ -7,70 +7,69 @@ import (
 	"github.com/go-shopify/shopify"
 )
 
-// AccessTokenStorage represents an access token storage.
-type AccessTokenStorage interface {
-	// GetAccessToken gets an access token for the specified shop.
+// OAuthTokenStorage represents an OAuth token storage.
+type OAuthTokenStorage interface {
+	// GetOAuthToken gets an OAuth token for the specified shop.
 	//
 	// If the request fails, an error is returned.
 	//
-	// If no access token exists for the shop, an empty access token is
-	// returned.
-	GetAccessToken(ctx context.Context, shop shopify.Shop) (shopify.AccessToken, error)
+	// If no OAuth token exists for the shop, a nil OAuth token is returned.
+	GetOAuthToken(ctx context.Context, shop shopify.Shop) (*shopify.OAuthToken, error)
 
-	// UpdateAccessToken updates an access token.
+	// UpdateOAuthToken updates an OAuth token.
 	//
-	// If the shop has no previous access token, it is then created.
-	UpdateAccessToken(ctx context.Context, shop shopify.Shop, accessToken shopify.AccessToken) error
+	// If the shop has no previous OAuth token, it is then created.
+	UpdateOAuthToken(ctx context.Context, shop shopify.Shop, oauthToken shopify.OAuthToken) error
 
-	// DeleteAccessToken deletes an access token for a shop.
+	// DeleteOAuthToken deletes an OAuth token for a shop.
 	//
-	// If the shop has no access token, the call is a no-op.
-	DeleteAccessToken(ctx context.Context, shop shopify.Shop) error
+	// If the shop has no OAuth token, the call is a no-op.
+	DeleteOAuthToken(ctx context.Context, shop shopify.Shop) error
 }
 
-// MemoryAccessTokenStorage implements in-memory storage of access tokens.
-type MemoryAccessTokenStorage struct {
-	accessTokens map[shopify.Shop]shopify.AccessToken
-	lock         sync.Mutex
+// MemoryOAuthTokenStorage implements in-memory storage of OAuth tokens.
+type MemoryOAuthTokenStorage struct {
+	oauthTokens map[shopify.Shop]shopify.OAuthToken
+	lock        sync.Mutex
 }
 
-// GetAccessToken gets an access token for the specified shop.
+// GetOAuthToken gets an OAuth token for the specified shop.
 //
 // The method never fails.
 //
-// If no access token exists for the shop, an empty access token is
-// returned.
-func (s *MemoryAccessTokenStorage) GetAccessToken(ctx context.Context, shop shopify.Shop) (shopify.AccessToken, error) {
+// If no OAuth token exists for the shop, a nil OAuth token is returned.
+func (s *MemoryOAuthTokenStorage) GetOAuthToken(ctx context.Context, shop shopify.Shop) (*shopify.OAuthToken, error) {
 	s.lock.Lock()
+	defer s.lock.Unlock()
 
-	accessToken, _ := s.dict()[shop]
+	if oauthToken, ok := s.dict()[shop]; ok {
+		return &oauthToken, nil
+	}
 
-	s.lock.Unlock()
-
-	return accessToken, nil
+	return nil, nil
 }
 
-// UpdateAccessToken updates an access token.
+// UpdateOAuthToken updates an OAuth token.
 //
-// If the shop has no previous access token, it is then created.
+// If the shop has no previous OAuth token, it is then created.
 //
 // The method never fails.
-func (s *MemoryAccessTokenStorage) UpdateAccessToken(ctx context.Context, shop shopify.Shop, accessToken shopify.AccessToken) error {
+func (s *MemoryOAuthTokenStorage) UpdateOAuthToken(ctx context.Context, shop shopify.Shop, oauthToken shopify.OAuthToken) error {
 	s.lock.Lock()
 
-	s.dict()[shop] = accessToken
+	s.dict()[shop] = oauthToken
 
 	s.lock.Unlock()
 
 	return nil
 }
 
-// DeleteAccessToken deletes an access token for a shop.
+// DeleteOAuthToken deletes an OAuth token for a shop.
 //
-// If the shop has no access token, the call is a no-op.
+// If the shop has no OAuth token, the call is a no-op.
 //
 // The method never fails.
-func (s *MemoryAccessTokenStorage) DeleteAccessToken(ctx context.Context, shop shopify.Shop) error {
+func (s *MemoryOAuthTokenStorage) DeleteOAuthToken(ctx context.Context, shop shopify.Shop) error {
 	s.lock.Lock()
 
 	delete(s.dict(), shop)
@@ -80,10 +79,10 @@ func (s *MemoryAccessTokenStorage) DeleteAccessToken(ctx context.Context, shop s
 	return nil
 }
 
-func (s *MemoryAccessTokenStorage) dict() map[shopify.Shop]shopify.AccessToken {
-	if s.accessTokens == nil {
-		s.accessTokens = map[shopify.Shop]shopify.AccessToken{}
+func (s *MemoryOAuthTokenStorage) dict() map[shopify.Shop]shopify.OAuthToken {
+	if s.oauthTokens == nil {
+		s.oauthTokens = map[shopify.Shop]shopify.OAuthToken{}
 	}
 
-	return s.accessTokens
+	return s.oauthTokens
 }

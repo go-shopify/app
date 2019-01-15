@@ -2,57 +2,62 @@ package app
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	"github.com/go-shopify/shopify"
 )
 
-func TestMemoryAccessTokenStorage(t *testing.T) {
-	var storage AccessTokenStorage = &MemoryAccessTokenStorage{}
+func TestMemoryOAuthTokenStorage(t *testing.T) {
+	var storage OAuthTokenStorage = &MemoryOAuthTokenStorage{}
 
 	ctx := context.Background()
 	shop := shopify.Shop("myshop")
 
-	accessToken, err := storage.GetAccessToken(ctx, shop)
+	oauthToken, err := storage.GetOAuthToken(ctx, shop)
 
 	if err != nil {
 		t.Fatalf("expected no error but got: %s", err)
 	}
 
-	if accessToken != "" {
-		t.Errorf("expected no access token: %s", accessToken)
+	if oauthToken != nil {
+		t.Errorf("expected no OAuth token: %s", oauthToken)
 	}
 
-	ref := shopify.AccessToken("token")
-	err = storage.UpdateAccessToken(ctx, shop, ref)
+	ref := shopify.OAuthToken{
+		AccessToken: "token",
+		Scope:       shopify.Scope{shopify.PermissionWriteProducts},
+	}
+
+	err = storage.UpdateOAuthToken(ctx, shop, ref)
 
 	if err != nil {
 		t.Fatalf("expected no error but got: %s", err)
 	}
 
-	accessToken, err = storage.GetAccessToken(ctx, shop)
+	oauthToken, err = storage.GetOAuthToken(ctx, shop)
 
 	if err != nil {
 		t.Fatalf("expected no error but got: %s", err)
 	}
 
-	if accessToken != ref {
-		t.Errorf("expected a different access token: %s", accessToken)
+	if !reflect.DeepEqual(*oauthToken, ref) {
+		t.Errorf("expected a different OAuth token: %s", *oauthToken)
 	}
 
-	err = storage.DeleteAccessToken(ctx, shop)
+	err = storage.DeleteOAuthToken(ctx, shop)
 
 	if err != nil {
 		t.Fatalf("expected no error but got: %s", err)
 	}
 
-	accessToken, err = storage.GetAccessToken(ctx, shop)
+	oauthToken, err = storage.GetOAuthToken(ctx, shop)
 
 	if err != nil {
 		t.Fatalf("expected no error but got: %s", err)
 	}
 
-	if accessToken != "" {
-		t.Errorf("expected no access token: %s", accessToken)
+	if oauthToken != nil {
+		t.Errorf("expected no OAuth token: %s", oauthToken)
 	}
 }
