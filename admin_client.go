@@ -104,6 +104,8 @@ func (c *AdminClient) GetOAuthAccessToken(ctx context.Context, apiKey APIKey, ap
 		return "", fmt.Errorf("failed to create request: %s", err)
 	}
 
+	req.Header.Set("Content-Type", "application/json")
+
 	resp, err := c.httpClient().Do(req)
 
 	if err != nil {
@@ -116,6 +118,12 @@ func (c *AdminClient) GetOAuthAccessToken(ctx context.Context, apiKey APIKey, ap
 		body, _ := ioutil.ReadAll(resp.Body)
 
 		return "", fmt.Errorf("unexpected return status code of %d (body follows):\n%s", resp.StatusCode, string(body))
+	}
+
+	if resp.Header.Get("Content-Type") != "application/json" {
+		body, _ := ioutil.ReadAll(resp.Body)
+
+		return "", fmt.Errorf("unexpected content-type `%s` (body follows):\n%s", resp.Header.Get("Content-Type"), string(body))
 	}
 
 	result := &struct {
