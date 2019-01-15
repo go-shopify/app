@@ -112,7 +112,7 @@ func (c *AdminClient) GetOAuthAccessToken(ctx context.Context, apiKey APIKey, ap
 
 	defer flushAndCloseBody(resp.Body)
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode == http.StatusOK {
 		body, _ := ioutil.ReadAll(resp.Body)
 
 		return "", fmt.Errorf("unexpected return status code of %d (body follows):\n%s", resp.StatusCode, string(body))
