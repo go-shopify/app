@@ -34,11 +34,22 @@ func NewAdminClient(shop Shop, accessToken AccessToken) *AdminClient {
 	return &AdminClient{
 		Shop:        shop,
 		AccessToken: accessToken,
+		HTTPClient:  newHTTPClient(),
 		shopURL: &url.URL{
 			Scheme: "https",
 			Host:   string(shop),
 		},
 	}
+}
+
+func newHTTPClient() *http.Client {
+	client := &http.Client{}
+
+	if Debug {
+		client.Transport = &DebugTransport{Transport: &http.Transport{}}
+	}
+
+	return client
 }
 
 func (c *AdminClient) httpClient() *http.Client {
@@ -100,6 +111,12 @@ func (c *AdminClient) GetOAuthAccessToken(ctx context.Context, apiKey APIKey, ap
 	}
 
 	defer flushAndCloseBody(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := ioutil.ReadAll(resp.Body)
+
+		return "", fmt.Errorf("unexpected return status code of %d (body follows):\n%s", resp.StatusCode, string(body))
+	}
 
 	result := &struct {
 		AccessToken AccessToken `json:"access_token"`
