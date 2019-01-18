@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -73,9 +74,16 @@ func (h handlerImpl) delegateOrInstall(w http.ResponseWriter, req *http.Request)
 		return
 	}
 
-	if h.handler != nil {
-		h.handler.ServeHTTP(w, req)
+	if h.handler == nil {
+		if h.OnError != nil {
+			h.OnError(req.Context(), errors.New("no handler defined"))
+		}
+
+		w.WriteHeader(http.StatusNotFound)
+		return
 	}
+
+	h.handler.ServeHTTP(w, req)
 }
 
 func (h handlerImpl) redirectToInstall(w http.ResponseWriter, req *http.Request, shop shopify.Shop) {
