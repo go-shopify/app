@@ -18,8 +18,6 @@ type handlerImpl struct {
 	storage OAuthTokenStorage
 }
 
-const pathAuthCallback = "/auth/callback"
-
 // NewHandler instantiates a new Shopify Handler, from the specified
 // configuration.
 //
@@ -41,7 +39,7 @@ func NewHandler(handler http.Handler, storage OAuthTokenStorage, config *Config)
 		storage: storage,
 	}
 
-	h.Router.Path(pathAuthCallback).Methods(http.MethodGet).HandlerFunc(h.authCallback)
+	h.Router.Path(h.authCallbackPath()).Methods(http.MethodGet).HandlerFunc(h.authCallback)
 	h.Router.PathPrefix("/").HandlerFunc(h.delegateOrInstall)
 
 	return NewHMACHandler(h, h.APISecret)
@@ -99,7 +97,7 @@ func (h handlerImpl) redirectToInstall(w http.ResponseWriter, req *http.Request,
 	q.Set("client_id", string(h.APIKey))
 	q.Set("scope", h.Scope.String())
 	q.Set("state", state)
-	q.Set("redirect_uri", h.PublicURL.ResolveReference(&url.URL{Path: pathAuthCallback}).String())
+	q.Set("redirect_uri", h.PublicURL.ResolveReference(&url.URL{Path: h.authCallbackPath()}).String())
 	oauthURL.RawQuery = q.Encode()
 
 	// Set a cookie to ensure the auth callback is really called by the right
