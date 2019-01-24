@@ -44,6 +44,11 @@ func verifyHMAC(h string, values url.Values, apiSecret shopify.APISecret) error 
 	return nil
 }
 
+func injectHMAC(values url.Values, apiSecret shopify.APISecret) {
+	hmac := computeHMAC(values, apiSecret)
+	values.Set("hmac", hmac)
+}
+
 // NewHMACHandler wraps an existing handler and adds HMAC verification logic.
 func NewHMACHandler(handler http.Handler, apiSecret shopify.APISecret) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
