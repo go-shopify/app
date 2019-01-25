@@ -110,7 +110,7 @@ func (h handlerImpl) redirectToInstall(w http.ResponseWriter, req *http.Request,
 	http.SetCookie(w, &http.Cookie{Name: "state", Value: state})
 
 	// Redirect the browser to the OAuth autorization page.
-	http.Redirect(w, req, oauthURL.String(), http.StatusFound)
+	clientRedirect(w, req, oauthURL.String())
 }
 
 func (h handlerImpl) completeInstall(w http.ResponseWriter, req *http.Request, shop shopify.Shop, state string) {
@@ -176,5 +176,24 @@ func (h handlerImpl) completeInstall(w http.ResponseWriter, req *http.Request, s
 		RawQuery: query.Encode(),
 	}
 
-	http.Redirect(w, req, redirectURL.String(), http.StatusFound)
+	clientRedirect(w, req, redirectURL.String())
+}
+
+func clientRedirect(w http.ResponseWriter, req *http.Request, url string) {
+	html := fmt.Sprintf(`
+<html>
+	<head>
+		<script>
+			if (window.self === window.top) {
+				window.location.href = '%s';
+			} else {
+				window.top.location.href = '%s';
+			}
+		</script>
+	</head>
+</html>
+`, url, url)
+
+	w.Header().Set("Content-Type", "text/html")
+	fmt.Fprintf(w, "%s", html)
 }
