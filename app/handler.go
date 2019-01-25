@@ -1,7 +1,6 @@
 package app
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -40,7 +39,6 @@ func NewHandler(handler http.Handler, storage OAuthTokenStorage, config *Config)
 		storage: storage,
 	}
 
-	h.Router.Path(h.authCallbackPath()).Methods(http.MethodGet).HandlerFunc(h.authCallback)
 	h.Router.PathPrefix("/").HandlerFunc(h.delegateOrInstall)
 
 	return NewHMACHandler(h, h.APISecret)
@@ -57,6 +55,14 @@ func (h handlerImpl) delegateOrInstall(w http.ResponseWriter, req *http.Request)
 
 	req = req.WithContext(WithShop(req.Context(), shop))
 
+	state := req.URL.Query().Get("state")
+
+	// If we have a state, assume we are being called back after an install/update.
+	if state != "" {
+		h.completeInstall(w, req, shop, state)
+		return
+	}
+
 	oauthToken, err := h.storage.GetOAuthToken(req.Context(), shop)
 
 	if err != nil {
@@ -71,15 +77,6 @@ func (h handlerImpl) delegateOrInstall(w http.ResponseWriter, req *http.Request)
 
 	if oauthToken == nil {
 		h.redirectToInstall(w, req, shop)
-		return
-	}
-
-	if h.handler == nil {
-		if h.OnError != nil {
-			h.OnError(req.Context(), errors.New("no handler defined"))
-		}
-
-		w.WriteHeader(http.StatusNotFound)
 		return
 	}
 
@@ -105,7 +102,7 @@ func (h handlerImpl) redirectToInstall(w http.ResponseWriter, req *http.Request,
 	q.Set("client_id", string(h.APIKey))
 	q.Set("scope", h.Scope.String())
 	q.Set("state", state)
-	q.Set("redirect_uri", h.PublicURL.ResolveReference(&url.URL{Path: h.authCallbackPath()}).String())
+	q.Set("redirect_uri", h.PublicURL.String())
 	oauthURL.RawQuery = q.Encode()
 
 	// Set a cookie to ensure the auth callback is really called by the right
@@ -116,28 +113,12 @@ func (h handlerImpl) redirectToInstall(w http.ResponseWriter, req *http.Request,
 	http.Redirect(w, req, oauthURL.String(), http.StatusFound)
 }
 
-func (h handlerImpl) authCallback(w http.ResponseWriter, req *http.Request) {
-	shop := shopify.Shop(req.URL.Query().Get("shop"))
-
-	if shop == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, "Missing `shop` parameter.")
-		return
-	}
-
+func (h handlerImpl) completeInstall(w http.ResponseWriter, req *http.Request, shop shopify.Shop, state string) {
 	stateCookie, err := req.Cookie("state")
 
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprintf(w, "Missing `state` cookie.")
-		return
-	}
-
-	state := req.URL.Query().Get("state")
-
-	if state == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, "Missing `state` parameter.")
 		return
 	}
 
@@ -181,19 +162,5 @@ func (h handlerImpl) authCallback(w http.ResponseWriter, req *http.Request) {
 	// Remove the state cookie.
 	http.SetCookie(w, &http.Cookie{Name: "state", Expires: time.Unix(0, 0)})
 
-	// Redirect the browser to the main page.
-	//
-	// Make sure parameters are correct or we will redirect to an error page.
-	query := url.Values{}
-	query.Set("shop", string(shop))
-	injectHMAC(query, h.APISecret)
-
-	redirectURL := &url.URL{
-		Scheme:   h.PublicURL.Scheme,
-		Host:     h.PublicURL.Host,
-		Path:     h.PublicURL.Path,
-		RawQuery: query.Encode(),
-	}
-
-	http.Redirect(w, req, redirectURL.String(), http.StatusFound)
+	h.handler.ServeHTTP(w, req)
 }

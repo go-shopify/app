@@ -28,21 +28,6 @@ type Config struct {
 
 	// OnError is a function to call whenever an error happens.
 	OnError func(ctx context.Context, err error)
-
-	// AuthCallbackPath is the path for the authentication callback.
-	//
-	// If not explicity set, a sane default is chosen.
-	AuthCallbackPath string
-}
-
-const defaultAuthCallbackPath = "/auth/callback"
-
-func (c *Config) authCallbackPath() string {
-	if c.AuthCallbackPath == "" {
-		return defaultAuthCallbackPath
-	}
-
-	return c.AuthCallbackPath
 }
 
 const (
