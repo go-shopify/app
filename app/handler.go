@@ -162,5 +162,19 @@ func (h handlerImpl) completeInstall(w http.ResponseWriter, req *http.Request, s
 	// Remove the state cookie.
 	http.SetCookie(w, &http.Cookie{Name: "state", Expires: time.Unix(0, 0)})
 
-	h.handler.ServeHTTP(w, req)
+	// Redirect the browser to the main page.
+	//
+	// Make sure parameters are correct or we will redirect to an error page.
+	query := url.Values{}
+	query.Set("shop", string(shop))
+	injectHMAC(query, h.APISecret)
+
+	redirectURL := &url.URL{
+		Scheme:   h.PublicURL.Scheme,
+		Host:     h.PublicURL.Host,
+		Path:     h.PublicURL.Path,
+		RawQuery: query.Encode(),
+	}
+
+	http.Redirect(w, req, redirectURL.String(), http.StatusFound)
 }
