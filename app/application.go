@@ -5,7 +5,7 @@ import "net/http"
 // Application represents a Shopify embedded application.
 type Application struct {
 	// Config contains the application configuration.
-	Config
+	Config *Config
 
 	// OAuthTokenStorage contains the OAuth token storage provider.
 	OAuthTokenStorage OAuthTokenStorage
@@ -22,7 +22,7 @@ type Application struct {
 // Upon a successful request, the handler stores or refreshes authentication
 // information on the client side, in the form of a cookie.
 func (a *Application) NewOAuthHandler(handler http.Handler) http.Handler {
-	return NewOAuthHandler(handler, a.OAuthTokenStorage, &a.Config, a.ErrorHandler)
+	return NewOAuthHandler(handler, a.OAuthTokenStorage, a.Config, a.ErrorHandler)
 }
 
 // NewProxyHandler instantiates a new Shopify proxy handler.
@@ -30,7 +30,7 @@ func (a *Application) NewOAuthHandler(handler http.Handler) http.Handler {
 // A typical usage of the handler is to serve pages, scripts or APIs through a
 // Shopify App proxy, usually from the storefront.
 func (a *Application) NewProxyHandler(handler AuthenticatedAPIHandler) http.Handler {
-	return NewProxyHandler(handler, a.OAuthTokenStorage, &a.Config, a.ErrorHandler)
+	return NewProxyHandler(handler, a.OAuthTokenStorage, a.Config, a.ErrorHandler)
 }
 
 // NewAPIHandler instantiates a new API handler.
