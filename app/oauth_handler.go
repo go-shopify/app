@@ -10,20 +10,24 @@ import (
 	"github.com/gorilla/mux"
 )
 
-// handlerImpl represents a Shopify handler.
-type handlerImpl struct {
+// oauthHandlerImpl represents a Shopify handler.
+type oauthHandlerImpl struct {
 	*mux.Router
 	Config
-	handler http.Handler
-	storage OAuthTokenStorage
+	storage      OAuthTokenStorage
+	handler      http.Handler
+	errorHandler ErrorHandler
 }
 
-// NewHandler instantiates a new Shopify Handler, from the specified
-// configuration.
+// NewOAuthHandler instantiates a new Shopify embedded app handler, from the
+// specified configuration.
 //
-// That handler handles OAuth access neogitation and injects shop, locale and
-// timestamp information into the request context.
-func NewHandler(handler http.Handler, storage OAuthTokenStorage, config *Config) http.Handler {
+// A typical usage of the handler is to server the `index.html` page of a
+// Shopify embedded app.
+//
+// Upon a successful request, the handler stores or refreshes authentication
+// information on the client side, in the form of a cookie.
+func NewOAuthHandler(handler http.Handler, storage OAuthTokenStorage, config *Config, errorHandler ErrorHandler) http.Handler {
 	if storage == nil {
 		panic("An OAuth token storage is required.")
 	}
@@ -32,19 +36,31 @@ func NewHandler(handler http.Handler, storage OAuthTokenStorage, config *Config)
 		panic("A configuration is required.")
 	}
 
-	h := handlerImpl{
-		Router:  mux.NewRouter(),
-		Config:  *config,
-		handler: handler,
-		storage: storage,
+	h := oauthHandlerImpl{
+		Router:       mux.NewRouter(),
+		Config:       *config,
+		storage:      storage,
+		handler:      handler,
+		errorHandler: errorHandler,
 	}
 
-	h.Router.PathPrefix("/").HandlerFunc(h.delegateOrInstall)
+	h.Router.PathPrefix("/").HandlerFunc(h.handlerRequest)
 
-	return NewHMACHandler(h, h.APISecret)
+	return newHMACHandler(h, h.APISecret)
 }
 
-func (h handlerImpl) delegateOrInstall(w http.ResponseWriter, req *http.Request) {
+func (h oauthHandlerImpl) handleError(w http.ResponseWriter, req *http.Request, err error) {
+	if h.errorHandler != nil {
+		h.errorHandler.ServeHTTPError(w, req, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusInternalServerError)
+	fmt.Fprintf(w, "Internal server error: you may contact the application adminstrator.\n")
+}
+
+func (h oauthHandlerImpl) handlerRequest(w http.ResponseWriter, req *http.Request) {
 	shop := shopify.Shop(req.URL.Query().Get("shop"))
 
 	if shop == "" {
@@ -57,31 +73,34 @@ func (h handlerImpl) delegateOrInstall(w http.ResponseWriter, req *http.Request)
 
 	// If we have a state, assume we are being called back after an install/update.
 	if state != "" {
-		h.completeInstall(w, req, shop, state)
+		h.handleInstallationCallback(w, req, shop, state)
 		return
 	}
 
+	// Load any existing OAuth token for that shop.
 	oauthToken, err := h.storage.GetOAuthToken(req.Context(), shop)
 
 	if err != nil {
-		if h.OnError != nil {
-			h.OnError(req.Context(), fmt.Errorf("failed to load OAuth token for `%s`: %s", shop, err))
-		}
-
-		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "Unexpected error. Please contact the App's administrator.")
+		h.handleError(w, req, fmt.Errorf("failed to load OAuth token for `%s`: %s", shop, err))
 		return
 	}
 
+	// If we don't have a token yet for that shop, redirect for the OAuth page.
 	if oauthToken == nil {
 		h.redirectToInstall(w, req, shop)
 		return
 	}
 
+	stok := &sessionToken{
+		Shop:       shop,
+		OAuthToken: *oauthToken,
+	}
+	http.SetCookie(w, stok.AsCookie())
+
 	h.handler.ServeHTTP(w, req)
 }
 
-func (h handlerImpl) redirectToInstall(w http.ResponseWriter, req *http.Request, shop shopify.Shop) {
+func (h oauthHandlerImpl) redirectToInstall(w http.ResponseWriter, req *http.Request, shop shopify.Shop) {
 	state, err := generateRandomState()
 
 	if err != nil {
@@ -111,7 +130,7 @@ func (h handlerImpl) redirectToInstall(w http.ResponseWriter, req *http.Request,
 	clientRedirect(w, req, oauthURL.String())
 }
 
-func (h handlerImpl) completeInstall(w http.ResponseWriter, req *http.Request, shop shopify.Shop, state string) {
+func (h oauthHandlerImpl) handleInstallationCallback(w http.ResponseWriter, req *http.Request, shop shopify.Shop, state string) {
 	stateCookie, err := req.Cookie("state")
 
 	if err != nil {
@@ -138,22 +157,12 @@ func (h handlerImpl) completeInstall(w http.ResponseWriter, req *http.Request, s
 	oauthToken, err := adminClient.GetOAuthToken(req.Context(), h.APIKey, h.APISecret, code)
 
 	if err != nil {
-		if h.OnError != nil {
-			h.OnError(req.Context(), fmt.Errorf("get OAuth token from Shopify for `%s`: %s", shop, err))
-		}
-
-		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "Unexpected error. Please contact the App's administrator.")
+		h.handleError(w, req, fmt.Errorf("get OAuth token from Shopify for `%s`: %s", shop, err))
 		return
 	}
 
 	if err = h.storage.UpdateOAuthToken(req.Context(), shop, *oauthToken); err != nil {
-		if h.OnError != nil {
-			h.OnError(req.Context(), fmt.Errorf("updating OAuth token for `%s`: %s", shop, err))
-		}
-
-		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "Unexpected error. Please contact the App's administrator.")
+		h.handleError(w, req, fmt.Errorf("updating OAuth token for `%s`: %s", shop, err))
 		return
 	}
 

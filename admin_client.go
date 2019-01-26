@@ -47,7 +47,7 @@ func newHTTPClient() *http.Client {
 	client := &http.Client{}
 
 	if Debug {
-		client.Transport = &DebugTransport{Transport: &http.Transport{}}
+		client.Transport = &debugTransport{Transport: &http.Transport{}}
 	}
 
 	return client

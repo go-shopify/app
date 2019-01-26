@@ -12,7 +12,7 @@ import (
 func TestNewHMACHandler(t *testing.T) {
 	apiSecret := shopify.APISecret("abcdefgh")
 
-	handler := NewHMACHandler(
+	handler := newHMACHandler(
 		http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		}),

@@ -17,12 +17,12 @@ func getDebug() bool {
 
 // A DebugTransport logs to the error output all the requests and responses
 // that go through it.
-type DebugTransport struct {
+type debugTransport struct {
 	Transport http.RoundTripper
 }
 
 // RoundTrip logs the request and its response.
-func (t *DebugTransport) RoundTrip(req *http.Request) (resp *http.Response, err error) {
+func (t *debugTransport) RoundTrip(req *http.Request) (resp *http.Response, err error) {
 	if data, err := httputil.DumpRequest(req, true); err == nil {
 		fmt.Fprintf(os.Stderr, "%s", string(data))
 	}

@@ -22,6 +22,21 @@ func (s Scope) String() string {
 	return strings.Join(strs, ",")
 }
 
+// Equal compares two scopes.
+func (s Scope) Equal(other Scope) bool {
+	if len(s) != len(other) {
+		return false
+	}
+
+	for i, v := range s {
+		if other[i] != v {
+			return false
+		}
+	}
+
+	return true
+}
+
 // ParseScope parses a string of comma-separated permissions.
 //
 // If the string has an incorrect format, an error is returned.

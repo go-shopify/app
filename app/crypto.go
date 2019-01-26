@@ -49,8 +49,8 @@ func injectHMAC(values url.Values, apiSecret shopify.APISecret) {
 	values.Set("hmac", hmac)
 }
 
-// NewHMACHandler wraps an existing handler and adds HMAC verification logic.
-func NewHMACHandler(handler http.Handler, apiSecret shopify.APISecret) http.Handler {
+// newHMACHandler wraps an existing handler and adds HMAC verification logic.
+func newHMACHandler(handler http.Handler, apiSecret shopify.APISecret) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		values := req.URL.Query()
 

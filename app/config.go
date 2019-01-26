@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"fmt"
 	"net/url"
 	"os"
@@ -25,9 +24,6 @@ type Config struct {
 	// The Scope of the app, as documented at
 	// https://help.shopify.com/en/api/getting-started/authentication/oauth/scopes.
 	Scope shopify.Scope
-
-	// OnError is a function to call whenever an error happens.
-	OnError func(ctx context.Context, err error)
 }
 
 const (
