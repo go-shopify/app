@@ -53,8 +53,6 @@ func (h handlerImpl) delegateOrInstall(w http.ResponseWriter, req *http.Request)
 		return
 	}
 
-	req = req.WithContext(WithShop(req.Context(), shop))
-
 	state := req.URL.Query().Get("state")
 
 	// If we have a state, assume we are being called back after an install/update.
