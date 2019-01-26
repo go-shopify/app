@@ -23,7 +23,11 @@ func (f AuthenticatedAPIHandlerFunc) ServeHTTPAPI(w http.ResponseWriter, req *ht
 }
 
 // NewAPIHandler instantiates a new API handler.
-func NewAPIHandler(authenticatedHandler AuthenticatedAPIHandler, oauthTokenStorage OAuthTokenStorage) http.Handler {
+//
+// A typical usage is to wrap custom API rest endpoints with an APIHandler to
+// ensure that the calls originates from a Shopify admin page that went through
+// a OAuthHandler.
+func NewAPIHandler(handler AuthenticatedAPIHandler, oauthTokenStorage OAuthTokenStorage) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		stok, err := verifySessionToken(req, oauthTokenStorage)
 
@@ -36,6 +40,6 @@ func NewAPIHandler(authenticatedHandler AuthenticatedAPIHandler, oauthTokenStora
 		// Make sure to refresh the cookie.
 		http.SetCookie(w, stok.AsCookie())
 
-		authenticatedHandler.ServeHTTPAPI(w, req, stok.Shop, &stok.OAuthToken)
+		handler.ServeHTTPAPI(w, req, stok.Shop, &stok.OAuthToken)
 	})
 }
