@@ -62,36 +62,3 @@ func verifySessionToken(req *http.Request, oauthTokenStorage OAuthTokenStorage) 
 
 	return &stok, nil
 }
-
-// AuthenticatedHandler represents a HTTP handler that contains additional shop and OAuth information.
-type AuthenticatedHandler interface {
-	ServeHTTPAuthenticated(w http.ResponseWriter, req *http.Request, shop shopify.Shop, oauthToken *shopify.OAuthToken)
-}
-
-// The AuthenticatedHandlerFunc type is an adapter to allow the use of ordinary functions as authenticated HTTP handlers.
-//
-// If f is a function with the appropriate signature, AuthenticatedHandlerFunc(f) is an AuthenticatedHandler that calls f.
-type AuthenticatedHandlerFunc func(w http.ResponseWriter, req *http.Request, shop shopify.Shop, oauthToken *shopify.OAuthToken)
-
-// ServeHTTPAuthenticated calls f(w, req, shop, oauthToken).
-func (f AuthenticatedHandlerFunc) ServeHTTPAuthenticated(w http.ResponseWriter, req *http.Request, shop shopify.Shop, oauthToken *shopify.OAuthToken) {
-	f(w, req, shop, oauthToken)
-}
-
-// NewSessionHandler instantiates a new session handler.
-func NewSessionHandler(authenticatedHandler AuthenticatedHandler, oauthTokenStorage OAuthTokenStorage) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		stok, err := verifySessionToken(req, oauthTokenStorage)
-
-		if err != nil {
-			w.WriteHeader(http.StatusForbidden)
-			fmt.Fprintf(w, "Error: %s.", err)
-			return
-		}
-
-		// Make sure to refresh the cookie.
-		http.SetCookie(w, stok.AsCookie())
-
-		authenticatedHandler.ServeHTTPAuthenticated(w, req, stok.Shop, &stok.OAuthToken)
-	})
-}

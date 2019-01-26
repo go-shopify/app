@@ -9,7 +9,7 @@ import (
 	"github.com/go-shopify/shopify"
 )
 
-func TestSessionHandler(t *testing.T) {
+func TestAPIHandler(t *testing.T) {
 	stok := &sessionToken{
 		Shop: "myshop",
 		OAuthToken: shopify.OAuthToken{
@@ -24,8 +24,8 @@ func TestSessionHandler(t *testing.T) {
 	oauthTokenStorage := &MemoryOAuthTokenStorage{}
 	oauthTokenStorage.UpdateOAuthToken(ctx, stok.Shop, stok.OAuthToken)
 
-	handler := NewSessionHandler(
-		AuthenticatedHandlerFunc(func(w http.ResponseWriter, req *http.Request, shop shopify.Shop, oauthToken *shopify.OAuthToken) {
+	handler := NewAPIHandler(
+		AuthenticatedAPIHandlerFunc(func(w http.ResponseWriter, req *http.Request, shop shopify.Shop, oauthToken *shopify.OAuthToken) {
 			if shop != stok.Shop {
 				t.Errorf("expected `%s` but got `%s`", shop, stok.Shop)
 			}
