@@ -49,6 +49,11 @@ func injectHMAC(values url.Values, apiSecret shopify.APISecret) {
 	values.Set("hmac", hmac)
 }
 
+func injectSignature(values url.Values, apiSecret shopify.APISecret) {
+	signature := computeHMAC(values, apiSecret)
+	values.Set("signature", signature)
+}
+
 // newHMACHandler wraps an existing handler and adds HMAC verification logic.
 func newHMACHandler(handler http.Handler, apiSecret shopify.APISecret) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -57,12 +62,15 @@ func newHMACHandler(handler http.Handler, apiSecret shopify.APISecret) http.Hand
 		hmac := values.Get("hmac")
 
 		if hmac == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprintf(w, "Missing `hmac` parameter.")
-			return
+			if hmac = values.Get("signature"); hmac == "" {
+				w.WriteHeader(http.StatusBadRequest)
+				fmt.Fprintf(w, "Missing `hmac` or `signature` parameter.")
+				return
+			}
 		}
 
 		values.Del("hmac")
+		values.Del("signature")
 
 		if err := verifyHMAC(hmac, values, apiSecret); err != nil {
 			w.WriteHeader(http.StatusForbidden)

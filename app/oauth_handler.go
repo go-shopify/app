@@ -7,12 +7,10 @@ import (
 	"time"
 
 	"github.com/go-shopify/shopify"
-	"github.com/gorilla/mux"
 )
 
 // oauthHandlerImpl represents a Shopify handler.
 type oauthHandlerImpl struct {
-	*mux.Router
 	Config
 	storage      OAuthTokenStorage
 	handler      http.Handler
@@ -22,7 +20,7 @@ type oauthHandlerImpl struct {
 // NewOAuthHandler instantiates a new Shopify embedded app handler, from the
 // specified configuration.
 //
-// A typical usage of the handler is to server the `index.html` page of a
+// A typical usage of the handler is to serve the `index.html` page of a
 // Shopify embedded app.
 //
 // Upon a successful request, the handler stores or refreshes authentication
@@ -37,14 +35,11 @@ func NewOAuthHandler(handler http.Handler, storage OAuthTokenStorage, config *Co
 	}
 
 	h := oauthHandlerImpl{
-		Router:       mux.NewRouter(),
 		Config:       *config,
 		storage:      storage,
 		handler:      handler,
 		errorHandler: errorHandler,
 	}
-
-	h.Router.PathPrefix("/").HandlerFunc(h.handlerRequest)
 
 	return newHMACHandler(h, h.APISecret)
 }
@@ -60,7 +55,7 @@ func (h oauthHandlerImpl) handleError(w http.ResponseWriter, req *http.Request, 
 	fmt.Fprintf(w, "Internal server error: you may contact the application adminstrator.\n")
 }
 
-func (h oauthHandlerImpl) handlerRequest(w http.ResponseWriter, req *http.Request) {
+func (h oauthHandlerImpl) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	shop := shopify.Shop(req.URL.Query().Get("shop"))
 
 	if shop == "" {
