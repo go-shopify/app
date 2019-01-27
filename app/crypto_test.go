@@ -94,3 +94,29 @@ func TestNewHMACHandler(t *testing.T) {
 		}
 	})
 }
+
+func TestNewSignatureHandler(t *testing.T) {
+	apiSecret := shopify.APISecret("abcdefgh")
+
+	handler := newSignatureHandler(
+		http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}),
+		apiSecret,
+	)
+
+	t.Run("good", func(t *testing.T) {
+		w := &httptest.ResponseRecorder{
+			Body: &bytes.Buffer{},
+		}
+
+		req, _ := http.NewRequest(http.MethodGet, "https://usitas.serveo.net/storefront/tags-1968064364644.html?shop=rose-pivoine-test.myshopify.com&path_prefix=%2Fapps%2Fproduct-tags&timestamp=1548547248&signature=c8456a9d004deac4e061543d290399abf4a88918fe0617688989437ca7483ba9", nil)
+
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected %d but got %d", http.StatusOK, w.Code)
+			t.Errorf("Body follows:\n%s", w.Body.String())
+		}
+	})
+}

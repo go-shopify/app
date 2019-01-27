@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/go-shopify/shopify"
 )
@@ -49,8 +50,28 @@ func injectHMAC(values url.Values, apiSecret shopify.APISecret) {
 	values.Set("hmac", hmac)
 }
 
+func computeSignature(values url.Values, apiSecret shopify.APISecret) string {
+	s := values.Encode()
+	s, _ = url.QueryUnescape(s)
+	s = strings.Replace(s, "&", "", -1)
+
+	hmac := hmac.New(sha256.New, []byte(apiSecret))
+	hmac.Write([]byte(s))
+	return hex.EncodeToString(hmac.Sum(nil))
+}
+
+func verifySignature(h string, values url.Values, apiSecret shopify.APISecret) error {
+	expected := computeSignature(values, apiSecret)
+
+	if !hmac.Equal([]byte(h), []byte(expected)) {
+		return fmt.Errorf("Signature verification failed: expected `%s` but got `%s`", expected, h)
+	}
+
+	return nil
+}
+
 func injectSignature(values url.Values, apiSecret shopify.APISecret) {
-	signature := computeHMAC(values, apiSecret)
+	signature := computeSignature(values, apiSecret)
 	values.Set("signature", signature)
 }
 
@@ -62,19 +83,41 @@ func newHMACHandler(handler http.Handler, apiSecret shopify.APISecret) http.Hand
 		hmac := values.Get("hmac")
 
 		if hmac == "" {
-			if hmac = values.Get("signature"); hmac == "" {
-				w.WriteHeader(http.StatusBadRequest)
-				fmt.Fprintf(w, "Missing `hmac` or `signature` parameter.")
-				return
-			}
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintf(w, "Missing `hmac` parameter.")
+			return
 		}
 
 		values.Del("hmac")
-		values.Del("signature")
 
 		if err := verifyHMAC(hmac, values, apiSecret); err != nil {
 			w.WriteHeader(http.StatusForbidden)
 			fmt.Fprintf(w, "HMAC verification failed.")
+			return
+		}
+
+		handler.ServeHTTP(w, req)
+	})
+}
+
+// newSignatureHandler  wraps an existing handler and adds signature verification logic.
+func newSignatureHandler(handler http.Handler, apiSecret shopify.APISecret) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		values := req.URL.Query()
+
+		signature := values.Get("signature")
+
+		if signature == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintf(w, "Missing `signature` parameter.")
+			return
+		}
+
+		values.Del("signature")
+
+		if err := verifySignature(signature, values, apiSecret); err != nil {
+			w.WriteHeader(http.StatusForbidden)
+			fmt.Fprintf(w, "Signature verification failed.")
 			return
 		}
 

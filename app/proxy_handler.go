@@ -35,7 +35,7 @@ func NewProxyHandler(handler AuthenticatedAPIHandler, storage OAuthTokenStorage,
 		errorHandler: errorHandler,
 	}
 
-	return newHMACHandler(h, h.APISecret)
+	return newSignatureHandler(h, h.APISecret)
 }
 
 func (h proxyHandlerImpl) handleError(w http.ResponseWriter, req *http.Request, err error) {
