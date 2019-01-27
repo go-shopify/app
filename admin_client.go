@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -186,6 +187,62 @@ type ScriptTag struct {
 	UpdatedAt    time.Time             `json:"updated_at,omitempty"`
 }
 
+// EnsureScriptTag makes sure that a specified script tag is registered in the shop.
+//
+// If the scriptTag has an ID, an optimistic GET is attempted first. If the GET
+// succeeds and the script tag is identical, the function exits immediately. No
+// duplicates are removed in that case.
+//
+// Otherwise, all script tags are fetched and compared to the specified one.
+// The first script tag that matches exactly is kept (and returned). Any
+// additional duplicate script tag is deleted. If no exact match is found, a
+// new script tag is created.
+func (c *AdminClient) EnsureScriptTag(ctx context.Context, scriptTag ScriptTag) (*ScriptTag, error) {
+	if scriptTag.ID != 0 {
+		result, err := c.GetScriptTag(ctx, scriptTag.ID, nil)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to lookup existing script tag with ID `%d`: %s", scriptTag.ID, err)
+		}
+
+		if result != nil {
+			return result, nil
+		}
+	}
+
+	scriptTags, err := c.GetAllScriptTags(ctx, nil)
+
+	if err != nil {
+		return nil, err
+	}
+
+	var wg sync.WaitGroup
+	defer wg.Wait()
+
+	for _, s := range scriptTags {
+		if s.Src == scriptTag.Src {
+			if s.DisplayScope == scriptTag.DisplayScope && scriptTag.ID == 0 {
+				scriptTag = s
+				continue
+			}
+
+			wg.Add(1)
+
+			go func(id ScriptTagID) {
+				defer wg.Done()
+				c.DeleteScriptTag(ctx, id)
+			}(s.ID)
+		}
+	}
+
+	// If we didn't find any existing matching script tag, create one and return it.
+	if scriptTag.ID == 0 {
+		return c.CreateOrUpdateScriptTag(ctx, scriptTag)
+	}
+
+	return &scriptTag, nil
+}
+
 // GetAllScriptTags retrieves a list of all script tags.
 func (c *AdminClient) GetAllScriptTags(ctx context.Context, fields SelectedFields) ([]ScriptTag, error) {
 	count, err := c.GetScriptTagsCount(ctx)
@@ -293,10 +350,56 @@ func (c *AdminClient) GetScriptTagsCount(ctx context.Context) (int, error) {
 	return result.Count, nil
 }
 
+// GetScriptTag fetches a script tag by ID.
+//
+// If no such script tag exists, a nil script tag and no error is returned.
+func (c *AdminClient) GetScriptTag(ctx context.Context, id ScriptTagID, fields SelectedFields) (*ScriptTag, error) {
+	values := url.Values{}
+	fields.injectInto(values)
+
+	req, err := c.newRequest(ctx, http.MethodGet, fmt.Sprintf("/admin/script_tags/%d.json", id), values, nil)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %s", err)
+	}
+
+	resp, err := c.httpClient().Do(req)
+
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %s", err)
+	}
+
+	defer flushAndCloseBody(resp.Body)
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+	case http.StatusNotFound:
+		return nil, nil
+	default:
+		body, _ := ioutil.ReadAll(resp.Body)
+
+		return nil, fmt.Errorf("unexpected return status code of %d (body follows):\n%s", resp.StatusCode, string(body))
+	}
+
+	body := &struct {
+		ScriptTag ScriptTag `json:"script_tag"`
+	}{}
+
+	if err = json.NewDecoder(resp.Body).Decode(body); err != nil {
+		return nil, fmt.Errorf("unable to parse response: %s", err)
+	}
+
+	return &body.ScriptTag, nil
+}
+
 // CreateOrUpdateScriptTag creates or updates a script tag.
 //
 // If the specified script tag has an ID, an update is attempted.
 func (c *AdminClient) CreateOrUpdateScriptTag(ctx context.Context, scriptTag ScriptTag) (*ScriptTag, error) {
+	if scriptTag.Event == "" {
+		scriptTag.Event = ScriptTagEventOnLoad
+	}
+
 	body := &struct {
 		ScriptTag ScriptTag `json:"script_tag"`
 	}{
