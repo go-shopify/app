@@ -1,6 +1,10 @@
 package app
 
-import "net/http"
+import (
+	"net/http"
+
+	"github.com/go-shopify/shopify"
+)
 
 // Application represents a Shopify embedded application.
 type Application struct {
@@ -23,6 +27,39 @@ type Application struct {
 // information on the client side, in the form of a cookie.
 func (a *Application) NewOAuthHandler(handler http.Handler) http.Handler {
 	return NewOAuthHandler(handler, a.OAuthTokenStorage, a.Config, a.ErrorHandler)
+}
+
+// NewOAuthMiddleware instantiates a new Shopify embedded app middleware.
+//
+// A typical usage of the handler is to serve the `index.html` page of a
+// Shopify embedded app.
+//
+// Upon a successful request, the handler stores or refreshes authentication
+// information on the client side, in the form of a cookie.
+func (a *Application) NewOAuthMiddleware() func(http.Handler) http.Handler {
+	return NewOAuthMiddleware(a.OAuthTokenStorage, a.Config, a.ErrorHandler)
+}
+
+// NewScriptTagsHandler instantiates a new script tags handler.
+//
+// A typical usage of the handler is to serve the `index.html` page of a
+// Shopify embedded app.
+//
+// Upon a successful request, the handler stores or refreshes authentication
+// information on the client side, in the form of a cookie.
+func (a *Application) NewScriptTagsHandler(handler http.Handler, scriptTags ...shopify.ScriptTag) http.Handler {
+	return NewScriptTagsHandler(handler, scriptTags...)
+}
+
+// NewScriptTagsMiddleware instantiates a new script tags middleware.
+//
+// A typical usage of the handler is to serve the `index.html` page of a
+// Shopify embedded app.
+//
+// Upon a successful request, the handler stores or refreshes authentication
+// information on the client side, in the form of a cookie.
+func (a *Application) NewScriptTagsMiddleware(scriptTags ...shopify.ScriptTag) func(http.Handler) http.Handler {
+	return NewScriptTagsMiddleware(scriptTags...)
 }
 
 // NewProxyHandler instantiates a new Shopify proxy handler.

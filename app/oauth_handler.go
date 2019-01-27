@@ -183,6 +183,20 @@ func (h oauthHandlerImpl) handleInstallationCallback(w http.ResponseWriter, req 
 	clientRedirect(w, req, redirectURL.String())
 }
 
+// NewOAuthMiddleware instantiates a new Shopify embedded app middleware, from
+// the specified configuration.
+//
+// A typical usage of the handler is to serve the `index.html` page of a
+// Shopify embedded app.
+//
+// Upon a successful request, the handler stores or refreshes authentication
+// information on the client side, in the form of a cookie.
+func NewOAuthMiddleware(storage OAuthTokenStorage, config *Config, errorHandler ErrorHandler) func(http.Handler) http.Handler {
+	return func(handler http.Handler) http.Handler {
+		return NewOAuthHandler(handler, storage, config, errorHandler)
+	}
+}
+
 func clientRedirect(w http.ResponseWriter, req *http.Request, url string) {
 	html := fmt.Sprintf(`
 <html>
