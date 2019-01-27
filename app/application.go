@@ -33,6 +33,14 @@ func (a *Application) NewProxyHandler(handler http.Handler) http.Handler {
 	return NewProxyHandler(handler, a.OAuthTokenStorage, a.Config, a.ErrorHandler)
 }
 
+// NewProxyMiddleware instantiates a new Shopify proxy handler.
+//
+// A typical usage of the handler is to serve pages, scripts or APIs through a
+// Shopify App proxy, usually from the storefront.
+func (a *Application) NewProxyMiddleware() func(http.Handler) http.Handler {
+	return NewProxyMiddleware(a.OAuthTokenStorage, a.Config, a.ErrorHandler)
+}
+
 // NewAPIHandler instantiates a new API handler.
 //
 // A typical usage is to wrap custom API rest endpoints with an APIHandler to
@@ -40,4 +48,13 @@ func (a *Application) NewProxyHandler(handler http.Handler) http.Handler {
 // a OAuthHandler.
 func (a *Application) NewAPIHandler(handler http.Handler) http.Handler {
 	return NewAPIHandler(handler, a.OAuthTokenStorage)
+}
+
+// NewAPIMiddleware instantiates a new API middleware.
+//
+// A typical usage is to wrap custom API rest endpoints with an APIHandler to
+// ensure that the calls originates from a Shopify admin page that went through
+// a OAuthHandler.
+func (a *Application) NewAPIMiddleware() func(http.Handler) http.Handler {
+	return NewAPIMiddleware(a.OAuthTokenStorage)
 }
