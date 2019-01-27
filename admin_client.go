@@ -399,6 +399,10 @@ func (c *AdminClient) GetScriptTag(ctx context.Context, id ScriptTagID, fields S
 // CreateOrUpdateScriptTag creates or updates a script tag.
 //
 // If the specified script tag has an ID, an update is attempted.
+//
+// Shopify requires absolute HTTPS URLs for script tags. This method however
+// supports relative URL and assumes that a relative URL is relative to the
+// shop URL.
 func (c *AdminClient) CreateOrUpdateScriptTag(ctx context.Context, scriptTag ScriptTag) (*ScriptTag, error) {
 	if scriptTag.Event == "" {
 		scriptTag.Event = ScriptTagEventOnLoad
@@ -417,6 +421,8 @@ func (c *AdminClient) CreateOrUpdateScriptTag(ctx context.Context, scriptTag Scr
 		shop, _ := GetShop(ctx)
 		u.Host = string(shop)
 	}
+
+	scriptTag.Src = u.String()
 
 	body := &struct {
 		ScriptTag ScriptTag `json:"script_tag"`
