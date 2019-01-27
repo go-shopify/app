@@ -148,8 +148,8 @@ func (h oauthHandlerImpl) handleInstallationCallback(w http.ResponseWriter, req 
 		return
 	}
 
-	adminClient := shopify.NewAdminClient(shop, "")
-	oauthToken, err := adminClient.GetOAuthToken(req.Context(), h.APIKey, h.APISecret, code)
+	req = req.WithContext(shopify.WithShop(req.Context(), shop))
+	oauthToken, err := shopify.DefaultAdminClient.GetOAuthToken(req.Context(), h.APIKey, h.APISecret, code)
 
 	if err != nil {
 		h.handleError(w, req, fmt.Errorf("get OAuth token from Shopify for `%s`: %s", shop, err))

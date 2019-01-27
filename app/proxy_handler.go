@@ -10,7 +10,7 @@ import (
 type proxyHandlerImpl struct {
 	Config
 	storage      OAuthTokenStorage
-	handler      AuthenticatedAPIHandler
+	handler      http.Handler
 	errorHandler ErrorHandler
 }
 
@@ -19,7 +19,7 @@ type proxyHandlerImpl struct {
 //
 // A typical usage of the handler is to serve pages, scripts or APIs through a
 // Shopify App proxy, usually from the storefront.
-func NewProxyHandler(handler AuthenticatedAPIHandler, storage OAuthTokenStorage, config *Config, errorHandler ErrorHandler) http.Handler {
+func NewProxyHandler(handler http.Handler, storage OAuthTokenStorage, config *Config, errorHandler ErrorHandler) http.Handler {
 	if storage == nil {
 		panic("An OAuth token storage is required.")
 	}
@@ -72,5 +72,19 @@ func (h proxyHandlerImpl) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	h.handler.ServeHTTPAPI(w, req, shop, oauthToken)
+	stok := &sessionToken{
+		Shop:       shop,
+		OAuthToken: *oauthToken,
+	}
+
+	req = req.WithContext(withSessionToken(req.Context(), stok))
+
+	h.handler.ServeHTTP(w, req)
+}
+
+// NewProxyMiddleware instantiates a new proxy middleware.
+func NewProxyMiddleware(storage OAuthTokenStorage, config *Config, errorHandler ErrorHandler) func(http.Handler) http.Handler {
+	return func(handler http.Handler) http.Handler {
+		return NewProxyHandler(handler, storage, config, errorHandler)
+	}
 }

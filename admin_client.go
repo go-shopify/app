@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -16,36 +17,23 @@ import (
 	"time"
 )
 
+// DefaultAdminClient is the default admin client.
+var DefaultAdminClient = &AdminClient{}
+
 // AdminClient represents a Shopify client, that can interact with the Shopify REST Admin API.
+//
+// An AdminClient takes its credentials from the specified context. See WithShop and WithAccessToken.
 type AdminClient struct {
-	// Shop is the shop associated to the admin client.
-	Shop Shop
-
-	// AccessToken is the access token to use for authentication.
-	AccessToken AccessToken
-
 	// HTTPClient is the HTTP client to use for requests.
 	//
 	// If none is specified, http.DefaultClient is used.
 	HTTPClient *http.Client
-
-	shopURL *url.URL
 }
 
 const headerXShopifyAccessToken = "X-Shopify-Access-Token"
 
-// NewAdminClient instantiates a new admin client for the specified shop.
-func NewAdminClient(shop Shop, accessToken AccessToken) *AdminClient {
-	return &AdminClient{
-		Shop:        shop,
-		AccessToken: accessToken,
-		HTTPClient:  newHTTPClient(),
-		shopURL: &url.URL{
-			Scheme: "https",
-			Host:   string(shop),
-		},
-	}
-}
+// DefaultHTTPClient is the default HTTP client used by AdminClient instances.
+var DefaultHTTPClient = newHTTPClient()
 
 func newHTTPClient() *http.Client {
 	client := &http.Client{}
@@ -62,15 +50,26 @@ func (c *AdminClient) httpClient() *http.Client {
 		return c.HTTPClient
 	}
 
-	return http.DefaultClient
+	return DefaultHTTPClient
 }
 
-func (c *AdminClient) newURL(path string, values url.Values) *url.URL {
+func (c *AdminClient) newURL(ctx context.Context, path string, values url.Values) (*url.URL, error) {
+	shop, ok := GetShop(ctx)
+
+	if !ok {
+		return nil, errors.New("context contains no shop")
+	}
+
 	if values == nil {
 		values = url.Values{}
 	}
 
-	return c.shopURL.ResolveReference(&url.URL{Path: path, RawQuery: values.Encode()})
+	shopURL := &url.URL{
+		Scheme: "https",
+		Host:   string(shop),
+	}
+
+	return shopURL.ResolveReference(&url.URL{Path: path, RawQuery: values.Encode()}), nil
 }
 
 func (c *AdminClient) newRequest(ctx context.Context, method string, path string, values url.Values, body interface{}) (*http.Request, error) {
@@ -86,7 +85,12 @@ func (c *AdminClient) newRequest(ctx context.Context, method string, path string
 		r = bytes.NewBuffer(data)
 	}
 
-	u := c.newURL(path, values)
+	u, err := c.newURL(ctx, path, values)
+
+	if err != nil {
+		return nil, err
+	}
+
 	req, err := http.NewRequest(method, u.String(), r)
 
 	if err != nil {
@@ -100,8 +104,8 @@ func (c *AdminClient) newRequest(ctx context.Context, method string, path string
 		req.Header.Set("Content-Type", "application/json")
 	}
 
-	if c.AccessToken != "" {
-		req.Header.Add(headerXShopifyAccessToken, string(c.AccessToken))
+	if accessToken, ok := GetAccessToken(ctx); ok {
+		req.Header.Add(headerXShopifyAccessToken, string(accessToken))
 	}
 
 	return req, nil

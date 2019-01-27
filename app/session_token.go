@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -61,4 +62,11 @@ func verifySessionToken(req *http.Request, oauthTokenStorage OAuthTokenStorage) 
 	}
 
 	return &stok, nil
+}
+
+func withSessionToken(ctx context.Context, stok *sessionToken) context.Context {
+	ctx = shopify.WithShop(ctx, stok.Shop)
+	ctx = shopify.WithOAuthToken(ctx, &stok.OAuthToken)
+
+	return ctx
 }

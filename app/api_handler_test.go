@@ -25,7 +25,13 @@ func TestAPIHandler(t *testing.T) {
 	oauthTokenStorage.UpdateOAuthToken(ctx, stok.Shop, stok.OAuthToken)
 
 	handler := NewAPIHandler(
-		AuthenticatedAPIHandlerFunc(func(w http.ResponseWriter, req *http.Request, shop shopify.Shop, oauthToken *shopify.OAuthToken) {
+		http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			shop, ok := shopify.GetShop(req.Context())
+
+			if !ok {
+				t.Fatalf("expected true")
+			}
+
 			if shop != stok.Shop {
 				t.Errorf("expected `%s` but got `%s`", shop, stok.Shop)
 			}

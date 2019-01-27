@@ -29,7 +29,7 @@ func (a *Application) NewOAuthHandler(handler http.Handler) http.Handler {
 //
 // A typical usage of the handler is to serve pages, scripts or APIs through a
 // Shopify App proxy, usually from the storefront.
-func (a *Application) NewProxyHandler(handler AuthenticatedAPIHandler) http.Handler {
+func (a *Application) NewProxyHandler(handler http.Handler) http.Handler {
 	return NewProxyHandler(handler, a.OAuthTokenStorage, a.Config, a.ErrorHandler)
 }
 
@@ -38,6 +38,6 @@ func (a *Application) NewProxyHandler(handler AuthenticatedAPIHandler) http.Hand
 // A typical usage is to wrap custom API rest endpoints with an APIHandler to
 // ensure that the calls originates from a Shopify admin page that went through
 // a OAuthHandler.
-func (a *Application) NewAPIHandler(handler AuthenticatedAPIHandler) http.Handler {
+func (a *Application) NewAPIHandler(handler http.Handler) http.Handler {
 	return NewAPIHandler(handler, a.OAuthTokenStorage)
 }
