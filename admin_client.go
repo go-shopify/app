@@ -191,6 +191,33 @@ type ScriptTag struct {
 	UpdatedAt    time.Time             `json:"updated_at,omitempty"`
 }
 
+func normalizeScriptTag(ctx context.Context, scriptTag *ScriptTag) {
+	if scriptTag.Event == "" {
+		scriptTag.Event = ScriptTagEventOnLoad
+	}
+
+	if u, err := url.Parse(scriptTag.Src); err == nil {
+		// If no scheme is provided, assume it is HTTPS as Shopify requires this.
+		if u.Scheme == "" {
+			u.Scheme = "https"
+		}
+
+		// If no host is provided (relative URL), assume the asset is to be loaded
+		// through the Shop (app proxy).
+		if u.Host == "" {
+			shop, ok := GetShop(ctx)
+
+			if !ok {
+				panic("no shop in context")
+			}
+
+			u.Host = string(shop)
+		}
+
+		scriptTag.Src = u.String()
+	}
+}
+
 // EnsureScriptTag makes sure that a specified script tag is registered in the shop.
 //
 // If the scriptTag has an ID, an optimistic GET is attempted first. If the GET
@@ -202,6 +229,8 @@ type ScriptTag struct {
 // additional duplicate script tag is deleted. If no exact match is found, a
 // new script tag is created.
 func (c *AdminClient) EnsureScriptTag(ctx context.Context, scriptTag ScriptTag) (*ScriptTag, error) {
+	normalizeScriptTag(ctx, &scriptTag)
+
 	if scriptTag.ID != 0 {
 		result, err := c.GetScriptTag(ctx, scriptTag.ID, nil)
 
@@ -404,25 +433,7 @@ func (c *AdminClient) GetScriptTag(ctx context.Context, id ScriptTagID, fields S
 // supports relative URL and assumes that a relative URL is relative to the
 // shop URL.
 func (c *AdminClient) CreateOrUpdateScriptTag(ctx context.Context, scriptTag ScriptTag) (*ScriptTag, error) {
-	if scriptTag.Event == "" {
-		scriptTag.Event = ScriptTagEventOnLoad
-	}
-
-	u, err := url.Parse(scriptTag.Src)
-
-	// If no scheme is provided, assume it is HTTPS as Shopify requires this.
-	if u.Scheme == "" {
-		u.Scheme = "https"
-	}
-
-	// If no host is provided (relative URL), assume the asset is to be loaded
-	// through the Shop (app proxy).
-	if u.Host == "" {
-		shop, _ := GetShop(ctx)
-		u.Host = string(shop)
-	}
-
-	scriptTag.Src = u.String()
+	normalizeScriptTag(ctx, &scriptTag)
 
 	body := &struct {
 		ScriptTag ScriptTag `json:"script_tag"`
@@ -431,6 +442,7 @@ func (c *AdminClient) CreateOrUpdateScriptTag(ctx context.Context, scriptTag Scr
 	}
 
 	var req *http.Request
+	var err error
 
 	if scriptTag.ID == 0 {
 		req, err = c.newRequest(ctx, http.MethodPost, "/admin/script_tags.json", nil, body)
