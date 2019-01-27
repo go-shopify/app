@@ -92,6 +92,8 @@ func (h oauthHandlerImpl) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	http.SetCookie(w, stok.AsCookie())
 
+	req = req.WithContext(withSessionToken(req.Context(), stok))
+
 	h.handler.ServeHTTP(w, req)
 }
 
