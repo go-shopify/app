@@ -10,6 +10,9 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
+	"strconv"
+	"strings"
+	"time"
 )
 
 // AdminClient represents a Shopify client, that can interact with the Shopify REST Admin API.
@@ -101,6 +104,270 @@ func (c *AdminClient) newRequest(ctx context.Context, method string, path string
 	}
 
 	return req, nil
+}
+
+// Pagination represents pagination options.
+type Pagination struct {
+	Limit   int
+	Page    int
+	SinceID int
+}
+
+func (o *Pagination) injectInto(values url.Values) {
+	if o == nil {
+		return
+	}
+
+	if o.Limit != 0 {
+		values.Set("limit", strconv.Itoa(o.Limit))
+	}
+
+	if o.Page != 0 {
+		values.Set("page", strconv.Itoa(o.Page))
+	}
+
+	if o.SinceID != 0 {
+		values.Set("since_id", strconv.Itoa(o.SinceID))
+	}
+}
+
+const (
+	// DefaultLimit is the default limit, as specified by Shopify.
+	DefaultLimit = 50
+
+	// MaxLimit is the maximum allowed limit, as specified by Shopify.
+	MaxLimit = 250
+)
+
+// SelectedFields represents a list of fields to fetch.
+type SelectedFields []string
+
+func (f SelectedFields) injectInto(values url.Values) {
+	if len(f) == 0 {
+		return
+	}
+
+	values.Set("fields", strings.Join(f, ","))
+}
+
+// ScriptTagEvent represents a script tag event.
+type ScriptTagEvent string
+
+const (
+	// ScriptTagEventOnLoad is the only possible value.
+	ScriptTagEventOnLoad ScriptTagEvent = "onload"
+)
+
+// ScriptTagDisplayScope represents a script tag display scope.
+type ScriptTagDisplayScope string
+
+const (
+	// ScriptTagDisplayScopeOnlineStore indicates that a script tag must be
+	// included only on the web storefront.
+	ScriptTagDisplayScopeOnlineStore ScriptTagDisplayScope = "online_store"
+	// ScriptTagDisplayScopeOrderStatus indicates that a script tag must be
+	// included only on the order status page.
+	ScriptTagDisplayScopeOrderStatus ScriptTagDisplayScope = "order_status"
+	// ScriptTagDisplayScopeAll indicates that a script tag must be
+	// included on all pages.
+	ScriptTagDisplayScopeAll ScriptTagDisplayScope = "all"
+)
+
+// ScriptTagID is an ID of a script tag.
+type ScriptTagID int
+
+// ScriptTag represents a script tag.
+type ScriptTag struct {
+	CreatedAt    time.Time             `json:"created_at,omitempty"`
+	Event        ScriptTagEvent        `json:"event"`
+	ID           ScriptTagID           `json:"id"`
+	Src          string                `json:"src"`
+	DisplayScope ScriptTagDisplayScope `json:"display_scope,omitempty"`
+	UpdatedAt    time.Time             `json:"updated_at,omitempty"`
+}
+
+// GetAllScriptTags retrieves a list of all script tags.
+func (c *AdminClient) GetAllScriptTags(ctx context.Context, fields SelectedFields) ([]ScriptTag, error) {
+	count, err := c.GetScriptTagsCount(ctx)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to count script tags: %s", err)
+	}
+
+	if count == 0 {
+		return nil, nil
+	}
+
+	pagination := &Pagination{
+		Limit: MaxLimit,
+	}
+
+	var result []ScriptTag
+
+	pageCount := ((count - 1) / pagination.Limit) + 1
+
+	for page := 1; page <= pageCount; page++ {
+		pagination.Page = page
+
+		scriptTags, err := c.GetScriptTags(ctx, pagination, fields)
+
+		if err != nil {
+			return nil, fmt.Errorf("fetching page %d/%d: %s", page, pageCount, err)
+		}
+
+		result = append(result, scriptTags...)
+	}
+
+	return result, nil
+}
+
+// GetScriptTags retrieves a list of script tags.
+//
+// To fetch the complete list, use GetAllScriptTags.
+func (c *AdminClient) GetScriptTags(ctx context.Context, pagination *Pagination, fields SelectedFields) ([]ScriptTag, error) {
+	values := url.Values{}
+	pagination.injectInto(values)
+	fields.injectInto(values)
+
+	req, err := c.newRequest(ctx, http.MethodGet, "/admin/script_tags.json", values, nil)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %s", err)
+	}
+
+	resp, err := c.httpClient().Do(req)
+
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %s", err)
+	}
+
+	defer flushAndCloseBody(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := ioutil.ReadAll(resp.Body)
+
+		return nil, fmt.Errorf("unexpected return status code of %d (body follows):\n%s", resp.StatusCode, string(body))
+	}
+
+	result := &struct {
+		ScriptTags []ScriptTag `json:"script_tags"`
+	}{}
+
+	if err = json.NewDecoder(resp.Body).Decode(result); err != nil {
+		return nil, fmt.Errorf("unable to parse response: %s", err)
+	}
+
+	return result.ScriptTags, nil
+}
+
+// GetScriptTagsCount retrieves the count of all script tags.
+func (c *AdminClient) GetScriptTagsCount(ctx context.Context) (int, error) {
+	req, err := c.newRequest(ctx, http.MethodGet, "/admin/script_tags/count.json", nil, nil)
+
+	if err != nil {
+		return 0, fmt.Errorf("failed to create request: %s", err)
+	}
+
+	resp, err := c.httpClient().Do(req)
+
+	if err != nil {
+		return 0, fmt.Errorf("request failed: %s", err)
+	}
+
+	defer flushAndCloseBody(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := ioutil.ReadAll(resp.Body)
+
+		return 0, fmt.Errorf("unexpected return status code of %d (body follows):\n%s", resp.StatusCode, string(body))
+	}
+
+	result := &struct {
+		Count int `json:"count"`
+	}{}
+
+	if err = json.NewDecoder(resp.Body).Decode(result); err != nil {
+		return 0, fmt.Errorf("unable to parse response: %s", err)
+	}
+
+	return result.Count, nil
+}
+
+// CreateOrUpdateScriptTag creates or updates a script tag.
+//
+// If the specified script tag has an ID, an update is attempted.
+func (c *AdminClient) CreateOrUpdateScriptTag(ctx context.Context, scriptTag ScriptTag) (*ScriptTag, error) {
+	body := &struct {
+		ScriptTag ScriptTag `json:"script_tag"`
+	}{
+		ScriptTag: scriptTag,
+	}
+
+	var req *http.Request
+	var err error
+
+	if scriptTag.ID == 0 {
+		req, err = c.newRequest(ctx, http.MethodPost, "/admin/script_tags.json", nil, body)
+	} else {
+		req, err = c.newRequest(ctx, http.MethodPut, fmt.Sprintf("/admin/script_tags/%d.json", scriptTag.ID), nil, body)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %s", err)
+	}
+
+	resp, err := c.httpClient().Do(req)
+
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %s", err)
+	}
+
+	defer flushAndCloseBody(resp.Body)
+
+	if scriptTag.ID == 0 {
+		if resp.StatusCode != http.StatusOK {
+			body, _ := ioutil.ReadAll(resp.Body)
+
+			return nil, fmt.Errorf("unexpected return status code of %d (body follows):\n%s", resp.StatusCode, string(body))
+		}
+	} else {
+		if resp.StatusCode != http.StatusCreated {
+			body, _ := ioutil.ReadAll(resp.Body)
+
+			return nil, fmt.Errorf("unexpected return status code of %d (body follows):\n%s", resp.StatusCode, string(body))
+		}
+	}
+
+	if err = json.NewDecoder(resp.Body).Decode(body); err != nil {
+		return nil, fmt.Errorf("unable to parse response: %s", err)
+	}
+
+	return &body.ScriptTag, nil
+}
+
+// DeleteScriptTag deletes a script tag.
+func (c *AdminClient) DeleteScriptTag(ctx context.Context, id ScriptTagID) error {
+	req, err := c.newRequest(ctx, http.MethodDelete, fmt.Sprintf("/admin/script_tags/%d.json", id), nil, nil)
+
+	if err != nil {
+		return fmt.Errorf("failed to create request: %s", err)
+	}
+
+	resp, err := c.httpClient().Do(req)
+
+	if err != nil {
+		return fmt.Errorf("request failed: %s", err)
+	}
+
+	defer flushAndCloseBody(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := ioutil.ReadAll(resp.Body)
+
+		return fmt.Errorf("unexpected return status code of %d (body follows):\n%s", resp.StatusCode, string(body))
+	}
+
+	return nil
 }
 
 // GetOAuthToken recovers a permanent access token for the associated shop,
