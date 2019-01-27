@@ -325,13 +325,13 @@ func (c *AdminClient) CreateOrUpdateScriptTag(ctx context.Context, scriptTag Scr
 	defer flushAndCloseBody(resp.Body)
 
 	if scriptTag.ID == 0 {
-		if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode != http.StatusCreated {
 			body, _ := ioutil.ReadAll(resp.Body)
 
 			return nil, fmt.Errorf("unexpected return status code of %d (body follows):\n%s", resp.StatusCode, string(body))
 		}
 	} else {
-		if resp.StatusCode != http.StatusCreated {
+		if resp.StatusCode != http.StatusOK {
 			body, _ := ioutil.ReadAll(resp.Body)
 
 			return nil, fmt.Errorf("unexpected return status code of %d (body follows):\n%s", resp.StatusCode, string(body))

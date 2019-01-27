@@ -8,5 +8,5 @@ type OAuthToken struct {
 
 // Equal compares two OAuth tokens.
 func (t OAuthToken) Equal(other OAuthToken) bool {
-	return t.AccessToken == other.AccessToken && t.Scope.Equal(other.Scope)
+	return t.AccessToken == other.AccessToken
 }
