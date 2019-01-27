@@ -404,6 +404,20 @@ func (c *AdminClient) CreateOrUpdateScriptTag(ctx context.Context, scriptTag Scr
 		scriptTag.Event = ScriptTagEventOnLoad
 	}
 
+	u, err := url.Parse(scriptTag.Src)
+
+	// If no scheme is provided, assume it is HTTPS as Shopify requires this.
+	if u.Scheme == "" {
+		u.Scheme = "https"
+	}
+
+	// If no host is provided (relative URL), assume the asset is to be loaded
+	// through the Shop (app proxy).
+	if u.Host == "" {
+		shop, _ := GetShop(ctx)
+		u.Host = string(shop)
+	}
+
 	body := &struct {
 		ScriptTag ScriptTag `json:"script_tag"`
 	}{
@@ -411,7 +425,6 @@ func (c *AdminClient) CreateOrUpdateScriptTag(ctx context.Context, scriptTag Scr
 	}
 
 	var req *http.Request
-	var err error
 
 	if scriptTag.ID == 0 {
 		req, err = c.newRequest(ctx, http.MethodPost, "/admin/script_tags.json", nil, body)
