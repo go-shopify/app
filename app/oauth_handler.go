@@ -61,7 +61,10 @@ func (h oauthHandlerImpl) handleError(w http.ResponseWriter, req *http.Request, 
 	fmt.Fprintf(w, "Internal server error: you may contact the application adminstrator.\n")
 }
 
-const shopifyAPIKeyCookieName = `shopify-api-key`
+const (
+	shopifyAPIKeyCookieName = `shopify-api-key`
+	shopifyShopCookieName   = `shopify-shop`
+)
 
 func (h oauthHandlerImpl) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	shop := shopify.Shop(req.URL.Query().Get("shop"))
@@ -102,6 +105,11 @@ func (h oauthHandlerImpl) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:   shopifyAPIKeyCookieName,
 		Value:  string(h.APIKey),
+		Secure: true,
+	})
+	http.SetCookie(w, &http.Cookie{
+		Name:   shopifyShopCookieName,
+		Value:  string(shop),
 		Secure: true,
 	})
 
