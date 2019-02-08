@@ -25,6 +25,12 @@ type oauthHandlerImpl struct {
 //
 // Upon a successful request, the handler stores or refreshes authentication
 // information on the client side, in the form of a cookie.
+//
+// The handler also stores the Shopify API key in a cookie named
+// `shopify-api-key`.
+//
+// Javascript admin apps can use that cookie to actually configure their
+// embedding in the Shopify admin portal.
 func NewOAuthHandler(handler http.Handler, storage OAuthTokenStorage, config *Config, errorHandler ErrorHandler) http.Handler {
 	if storage == nil {
 		panic("An OAuth token storage is required.")
@@ -54,6 +60,8 @@ func (h oauthHandlerImpl) handleError(w http.ResponseWriter, req *http.Request, 
 	w.WriteHeader(http.StatusInternalServerError)
 	fmt.Fprintf(w, "Internal server error: you may contact the application adminstrator.\n")
 }
+
+const shopifyAPIKeyCookieName = `shopify-api-key`
 
 func (h oauthHandlerImpl) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	shop := shopify.Shop(req.URL.Query().Get("shop"))
@@ -91,6 +99,11 @@ func (h oauthHandlerImpl) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		OAuthToken: *oauthToken,
 	}
 	http.SetCookie(w, stok.AsCookie())
+	http.SetCookie(w, &http.Cookie{
+		Name:   shopifyAPIKeyCookieName,
+		Value:  string(h.APIKey),
+		Secure: true,
+	})
 
 	req = req.WithContext(withSessionToken(req.Context(), stok))
 
