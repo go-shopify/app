@@ -43,11 +43,11 @@ func NewOAuthHandler(handler http.Handler, storage OAuthTokenStorage, config *Co
 	h := oauthHandlerImpl{
 		Config:       *config,
 		storage:      storage,
-		handler:      handler,
+		handler:      newHMACHandler(handler, config.APISecret),
 		errorHandler: errorHandler,
 	}
 
-	return newHMACHandler(h, h.APISecret)
+	return h
 }
 
 func (h oauthHandlerImpl) handleError(w http.ResponseWriter, req *http.Request, err error) {
