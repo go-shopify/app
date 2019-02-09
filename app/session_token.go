@@ -22,6 +22,7 @@ func (t sessionToken) AsCookie() *http.Cookie {
 	data, _ := json.Marshal(&t)
 
 	return &http.Cookie{
+		Path:   "/",
 		Name:   sessionTokenCookieName,
 		Value:  base64.URLEncoding.EncodeToString(data),
 		Secure: true,
