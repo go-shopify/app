@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"time"
 
 	"github.com/go-shopify/shopify"
 )
@@ -185,7 +184,10 @@ func (h oauthHandlerImpl) handleInstallationCallback(w http.ResponseWriter, req 
 	}
 
 	// Remove the state cookie.
-	http.SetCookie(w, &http.Cookie{Name: "state", Expires: time.Unix(0, 0)})
+	http.SetCookie(w, &http.Cookie{
+		Name:   "state",
+		MaxAge: -1,
+	})
 
 	// Redirect the browser to the main page.
 	//

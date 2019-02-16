@@ -15,6 +15,8 @@ func NewAPIHandler(handler http.Handler, oauthTokenStorage OAuthTokenStorage) ht
 		stok, err := verifySessionToken(req, oauthTokenStorage)
 
 		if err != nil {
+			// Erase the session cookie in case of error.
+			http.SetCookie(w, &http.Cookie{Name: sessionTokenCookieName, MaxAge: -1})
 			w.WriteHeader(http.StatusForbidden)
 			fmt.Fprintf(w, "Error: %s.", err)
 			return
