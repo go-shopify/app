@@ -51,9 +51,21 @@ func TestAPIHandler(t *testing.T) {
 		}
 	})
 
+	t.Run("valid cookie missing shop", func(t *testing.T) {
+		w := &httptest.ResponseRecorder{}
+		req := httptest.NewRequest(http.MethodGet, "https://foo", nil)
+		req.AddCookie(stok.AsCookie())
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("expected %d but got %d", http.StatusForbidden, w.Code)
+		}
+	})
+
 	t.Run("valid cookie", func(t *testing.T) {
 		w := &httptest.ResponseRecorder{}
 		req := httptest.NewRequest(http.MethodGet, "https://foo", nil)
+		req.AddCookie(&http.Cookie{Name: shopifyShopCookieName, Value: string(stok.Shop)})
 		req.AddCookie(stok.AsCookie())
 		handler.ServeHTTP(w, req)
 
